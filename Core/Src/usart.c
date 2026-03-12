@@ -238,7 +238,7 @@ HAL_StatusTypeDef Uart_StartRxToIdleDMA(UART_HandleTypeDef *huart)
 {
     if (huart == &huart1)//串口正确
     {
-			  //获取DMA存到usart1_rx_dma_buf数组中的数据，和数据长度
+			  //启动 UART 的 DMA 接收，当检测到串口空闲线时自动停止接收。
         HAL_StatusTypeDef status = HAL_UARTEx_ReceiveToIdle_DMA(&huart1, usart1_rx_dma_buf, UART1_RX_DMA_BUF_LEN);
         if (status == HAL_OK)
         {//关闭dma使能
@@ -249,7 +249,7 @@ HAL_StatusTypeDef Uart_StartRxToIdleDMA(UART_HandleTypeDef *huart)
 
     return HAL_ERROR;
 }
-//串口接收到数据事件触发
+//当接收完成或串口空闲时,接收到数据事件触发
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
@@ -260,7 +260,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         {
             uint16_t i = 0U;
             for (i = 0U; i < Size; i++)
-            {   //向队列中写数据
+            {   //对每个字节调用注册的回调函数Uart1RxQueueCallback(),向队列中写数据
                 if (usart1_rx_callback(huart, usart1_rx_dma_buf[i], usart1_rx_user_ctx) != 0U)
                 {
                     xHigherPriorityTaskWoken = pdTRUE;
@@ -269,7 +269,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         }
         (void)Uart_StartRxToIdleDMA(&huart1);//开启DMA
     }
-
+    //ISR结束,通知RTOS进行任务切换，若有更高优先级任务就绪，立即切换
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 

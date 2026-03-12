@@ -272,6 +272,7 @@ void StartupTaskFun(void *argument)
 void MonitorTaskFun(void *argument)
 {
   /* USER CODE BEGIN MonitorTaskFun */
+  //"Monitor":¼à¿Ø¡¢¼àÊÓÏµÍ³×´Ì¬¡¢×ÊÔ´Ê¹ÓÃÇé¿ö
   uint8_t ch;
   static uint8_t uartBuf[UART_BUF_LEN];  
   static uint8_t uartIndex = 0;          
@@ -286,21 +287,21 @@ void MonitorTaskFun(void *argument)
   for(;;)
   {
 			
-       // æ¯éš” 1 ç§’æ‰“å°ä¸€æ¬¡æ ˆå‰©ä½™ç©ºé—´
+       // Ã¿¸ô 1 Ãë´òÓ¡Ò»´ÎÕ»Ê£Óà¿Õ¼ä
         if ((xTaskGetTickCount() - lastTick) > 1000)
         {
             lastTick = xTaskGetTickCount();
 
-            // æ‰“å°æ¯ä¸ªä»»åŠ¡å‰©ä½™æ ˆç©ºé—´
+            // ´òÓ¡Ã¿¸öÈÎÎñÊ£ÓàÕ»¿Õ¼ä
             UartPrintf("MonitorTask free stack: %u\r\n",
                        uxTaskGetStackHighWaterMark(MonitorTaskHandle));
 //					  UartPrintf("CommutationTaskHandle free stack: %u\r\n",
 //                       uxTaskGetStackHighWaterMark(CommutationTaskHandle));
-					  adc_temp = (g_adc_u_value[8]-0.76f)/0.0025f+25;  // å…ˆèµ‹å€¼ç»™å±€éƒ¨å˜é‡
+					  adc_temp = (g_adc_u_value[8]-0.76f)/0.0025f+25;  // ÏÈ¸³Öµ¸ø¾Ö²¿±äÁ¿
             UartPrintf("adc : %d\r\n", (uint16_t)(adc_temp*10));
         }
 				
-        //æŸ¥è¯¢ä¸²å£æ¥æ”¶é˜Ÿåˆ—
+        //²éÑ¯´®¿Ú½ÓÊÕ¶ÓÁĞ
         if (xQueueReceive(uartRxQueue, &ch, 0) == pdPASS)
         {
             if (uartIndex < UART_BUF_LEN - 1) 
@@ -315,14 +316,14 @@ void MonitorTaskFun(void *argument)
             {
                 uartBuf[uartIndex] = 0; 
                 uartIndex = 0;           
-							  UartPrintf("%s", uartBuf);//å¯ä»¥å®ç°ç±»ä¼¼printfå‡½æ•°
-							  //åŠ è§£æå‡½æ•°
+							  UartPrintf("%s", uartBuf);//¿ÉÒÔÊµÏÖÀàËÆprintfº¯Êı
+							  //¼Ó½âÎöº¯Êı
 							
             }
 						lastCh = ch; 
         }
 				
-				//æŸ¥è¯¢ä¸²å£å‘é€é˜Ÿåˆ—
+				//²éÑ¯´®¿Ú·¢ËÍ¶ÓÁĞ
 				if (xQueueReceive(uartTxQueue, txBuf, 0) == pdPASS)
         {
             uint16_t txLen = 0U;

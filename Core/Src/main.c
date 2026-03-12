@@ -73,6 +73,8 @@ void MX_FREERTOS_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+//1. 在 `Uart1RxQueueCallback()` 中，将字节通过 `xQueueSendFromISR()` 发送到 `uartRxQueue` 队列
+
 static uint8_t Uart1RxQueueCallback(UART_HandleTypeDef *huart, uint8_t byte, void *user_ctx)
 {
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
