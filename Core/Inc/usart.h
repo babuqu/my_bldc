@@ -38,8 +38,8 @@ extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN Private defines */
-#define UART_TX_BUF_LEN 64    
-#define UART_TX_QUEUE_LEN 10  
+#define UART_TX_BUF_LEN 128    
+#define UART_TX_QUEUE_LEN 64  
 #define UART_BUF_LEN 64
 #define UART1_RX_DMA_BUF_LEN 64
 /* USER CODE END Private defines */

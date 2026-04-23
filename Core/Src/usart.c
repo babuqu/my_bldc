@@ -130,7 +130,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     hdma_usart1_rx.Init.MemInc = DMA_MINC_ENABLE;
     hdma_usart1_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
     hdma_usart1_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
-    hdma_usart1_rx.Init.Mode = DMA_NORMAL;
+    hdma_usart1_rx.Init.Mode = DMA_CIRCULAR;
     hdma_usart1_rx.Init.Priority = DMA_PRIORITY_HIGH;
     hdma_usart1_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
     if (HAL_DMA_Init(&hdma_usart1_rx) != HAL_OK)
@@ -229,19 +229,19 @@ void Uart_RegisterRxCallback(UART_HandleTypeDef *huart, uart_rx_callback_t callb
 {
     if (huart == &huart1)
     {
-        usart1_rx_callback = callback;//»Øµ÷º¯ÊýÃû³Æ
-        usart1_rx_user_ctx = user_ctx;//»º´æ¶ÓÁÐ
+        usart1_rx_callback = callback;//ï¿½Øµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+        usart1_rx_user_ctx = user_ctx;//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     }
 }
 
 HAL_StatusTypeDef Uart_StartRxToIdleDMA(UART_HandleTypeDef *huart)
 {
-    if (huart == &huart1)//´®¿ÚÕýÈ·
+    if (huart == &huart1)//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È·
     {
-			  //Æô¶¯ UART µÄ DMA ½ÓÊÕ£¬µ±¼ì²âµ½´®¿Ú¿ÕÏÐÏßÊ±×Ô¶¯Í£Ö¹½ÓÊÕ¡£
+			  //ï¿½ï¿½ï¿½ï¿½ UART ï¿½ï¿½ DMA ï¿½ï¿½ï¿½Õ£ï¿½ï¿½ï¿½ï¿½ï¿½âµ½ï¿½ï¿½ï¿½Ú¿ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½Ô¶ï¿½Í£Ö¹ï¿½ï¿½ï¿½Õ¡ï¿½
         HAL_StatusTypeDef status = HAL_UARTEx_ReceiveToIdle_DMA(&huart1, usart1_rx_dma_buf, UART1_RX_DMA_BUF_LEN);
         if (status == HAL_OK)
-        {//¹Ø±ÕdmaÊ¹ÄÜ
+        {//ï¿½Ø±ï¿½dmaÊ¹ï¿½ï¿½
             __HAL_DMA_DISABLE_IT(&hdma_usart1_rx, DMA_IT_HT);
         }
         return status;
@@ -249,7 +249,7 @@ HAL_StatusTypeDef Uart_StartRxToIdleDMA(UART_HandleTypeDef *huart)
 
     return HAL_ERROR;
 }
-//µ±½ÓÊÕÍê³É»ò´®¿Ú¿ÕÏÐÊ±,½ÓÊÕµ½Êý¾ÝÊÂ¼þ´¥·¢
+//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½É»ò´®¿Ú¿ï¿½ï¿½ï¿½Ê±,ï¿½ï¿½ï¿½Õµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
@@ -260,16 +260,16 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         {
             uint16_t i = 0U;
             for (i = 0U; i < Size; i++)
-            {   //¶ÔÃ¿¸ö×Ö½Úµ÷ÓÃ×¢²áµÄ»Øµ÷º¯ÊýUart1RxQueueCallback(),Ïò¶ÓÁÐÖÐÐ´Êý¾Ý
+            {   //ï¿½ï¿½Ã¿ï¿½ï¿½ï¿½Ö½Úµï¿½ï¿½ï¿½×¢ï¿½ï¿½Ä»Øµï¿½ï¿½ï¿½ï¿½ï¿½Uart1RxQueueCallback(),ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð´ï¿½ï¿½ï¿½ï¿½
                 if (usart1_rx_callback(huart, usart1_rx_dma_buf[i], usart1_rx_user_ctx) != 0U)
                 {
                     xHigherPriorityTaskWoken = pdTRUE;
                 }
             }
         }
-        (void)Uart_StartRxToIdleDMA(&huart1);//¿ªÆôDMA
+        (void)Uart_StartRxToIdleDMA(&huart1);//ï¿½ï¿½ï¿½ï¿½DMA
     }
-    //ISR½áÊø,Í¨ÖªRTOS½øÐÐÈÎÎñÇÐ»»£¬ÈôÓÐ¸ü¸ßÓÅÏÈ¼¶ÈÎÎñ¾ÍÐ÷£¬Á¢¼´ÇÐ»»
+    //ISRï¿½ï¿½ï¿½ï¿½,Í¨ÖªRTOSï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð»ï¿½
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 

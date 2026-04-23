@@ -88,14 +88,14 @@ const osThreadAttr_t SpeedTask_attributes = {
 osThreadId_t StartupTaskHandle;
 const osThreadAttr_t StartupTask_attributes = {
   .name = "StartupTask",
-  .stack_size = 128 * 4,
+  .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityRealtime5,
 };
 /* Definitions for MonitorTask */
 osThreadId_t MonitorTaskHandle;
 const osThreadAttr_t MonitorTask_attributes = {
   .name = "MonitorTask",
-  .stack_size = 128 * 4,
+  .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityRealtime4,
 };
 
@@ -257,7 +257,10 @@ void StartupTaskFun(void *argument)
   for(;;)
   {
 		//uart_print("StartupTask\r\n");
-    osDelay(1);
+    osDelay(1000);
+    HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+		osDelay(1000);
+		HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
   }
   /* USER CODE END StartupTaskFun */
 }
@@ -272,36 +275,50 @@ void StartupTaskFun(void *argument)
 void MonitorTaskFun(void *argument)
 {
   /* USER CODE BEGIN MonitorTaskFun */
-  //"Monitor":¼à¿Ø¡¢¼àÊÓÏµÍ³×´Ì¬¡¢×ÊÔ´Ê¹ÓÃÇé¿ö
+  //"Monitor":ï¿½ï¿½Ø¡ï¿½ï¿½ï¿½ï¿½ï¿½ÏµÍ³×´Ì¬ï¿½ï¿½ï¿½ï¿½Ô´Ê¹ï¿½ï¿½ï¿½ï¿½ï¿½
   uint8_t ch;
   static uint8_t uartBuf[UART_BUF_LEN];  
   static uint8_t uartIndex = 0;          
 	static uint8_t lastCh = 0;        
   extern QueueHandle_t uartRxQueue;
 	extern QueueHandle_t uartTxQueue;
+	extern GetValue_t sensor_data;
 	static uint8_t txBuf[UART_TX_BUF_LEN];
 	TickType_t lastTick = 0;
 	
-	float adc_temp =0;
   /* Infinite loop */
   for(;;)
   {
 			
-       // Ã¿¸ô 1 Ãë´òÓ¡Ò»´ÎÕ»Ê£Óà¿Õ¼ä
+       // Ã¿ï¿½ï¿½ 1 ï¿½ï¿½ï¿½Ó¡Ò»ï¿½ï¿½Õ»Ê£ï¿½ï¿½Õ¼ï¿½
         if ((xTaskGetTickCount() - lastTick) > 1000)
         {
             lastTick = xTaskGetTickCount();
 
-            // ´òÓ¡Ã¿¸öÈÎÎñÊ£ÓàÕ»¿Õ¼ä
+            // ï¿½ï¿½Ó¡Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê£ï¿½ï¿½Õ»ï¿½Õ¼ï¿½
             UartPrintf("MonitorTask free stack: %u\r\n",
                        uxTaskGetStackHighWaterMark(MonitorTaskHandle));
 //					  UartPrintf("CommutationTaskHandle free stack: %u\r\n",
 //                       uxTaskGetStackHighWaterMark(CommutationTaskHandle));
-					  adc_temp = (g_adc_u_value[8]-0.76f)/0.0025f+25;  // ÏÈ¸³Öµ¸ø¾Ö²¿±äÁ¿
-            UartPrintf("adc : %d\r\n", (uint16_t)(adc_temp*10));
+					  //adc_temp = (g_adc_u_value[8]-0.76f)/0.0025f+25;  // ï¿½È¸ï¿½Öµï¿½ï¿½ï¿½Ö²ï¿½ï¿½ï¿½ï¿½ï¿½
+					  UartPrintf("ntc  :  %.2f\t", sensor_data.ntc);
+            UartPrintf("temperature : %.2f\r\n", sensor_data.temperature);
+					
+					  UartPrintf("emf_m : %.2f\t", sensor_data.emf_m);
+					  UartPrintf("emf_u : %.2f\t", sensor_data.emf_u);
+					  UartPrintf("emf_v : %.2f\t", sensor_data.emf_v);
+					  UartPrintf("emf_w : %.2f\r\n", sensor_data.emf_w);
+					
+					  UartPrintf("i_u : %.2f\t", sensor_data.i_u);
+					  UartPrintf("i_v : %.2f\t", sensor_data.i_v);
+					  UartPrintf("i_w : %.2f\r\n", sensor_data.i_w);
+					
+					  UartPrintf("v12 : %.2f\t", sensor_data.v12);
+					  UartPrintf("v5  :  %.2f\t", sensor_data.v5);
+					  UartPrintf("Vbus_v : %.2f\r\n", sensor_data.Vbus_v);		
         }
 				
-        //²éÑ¯´®¿Ú½ÓÊÕ¶ÓÁÐ
+        //ï¿½ï¿½Ñ¯ï¿½ï¿½ï¿½Ú½ï¿½ï¿½Õ¶ï¿½ï¿½ï¿½
         if (xQueueReceive(uartRxQueue, &ch, 0) == pdPASS)
         {
             if (uartIndex < UART_BUF_LEN - 1) 
@@ -316,14 +333,14 @@ void MonitorTaskFun(void *argument)
             {
                 uartBuf[uartIndex] = 0; 
                 uartIndex = 0;           
-							  UartPrintf("%s", uartBuf);//¿ÉÒÔÊµÏÖÀàËÆprintfº¯Êý
-							  //¼Ó½âÎöº¯Êý
+							  UartPrintf("%s", uartBuf);//ï¿½ï¿½ï¿½ï¿½Êµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½printfï¿½ï¿½ï¿½ï¿½
+							  //ï¿½Ó½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 							
             }
 						lastCh = ch; 
         }
 				
-				//²éÑ¯´®¿Ú·¢ËÍ¶ÓÁÐ
+				//ï¿½ï¿½Ñ¯ï¿½ï¿½ï¿½Ú·ï¿½ï¿½Í¶ï¿½ï¿½ï¿½
 				if (xQueueReceive(uartTxQueue, txBuf, 0) == pdPASS)
         {
             uint16_t txLen = 0U;
