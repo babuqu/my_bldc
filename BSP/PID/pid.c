@@ -44,10 +44,10 @@ void pid_init(void)
     g_speed_pid.Proportion = KP;    /* 比例常数 Proportional Const*/
     g_speed_pid.Integral = KI;      /* 积分常数 Integral Const*/
     g_speed_pid.Derivative = KD;    /* 微分常数 Derivative Const*/ 
-    g_speed_pid.IngMax = 9000;
-    g_speed_pid.IngMin = -9000;
-    g_speed_pid.OutMax = 9000;      /* 输出限制 */
-    g_speed_pid.OutMin = -9000;    
+    g_speed_pid.IngMax = 8000;
+    g_speed_pid.IngMin = -8000;
+    g_speed_pid.OutMax = 8000;      /* 输出限制 */
+    g_speed_pid.OutMin = -8000;    
 }
 float *user_setpoint = (float*)(&g_speed_pid.SetPoint);
 
@@ -57,7 +57,7 @@ float *user_setpoint = (float*)(&g_speed_pid.SetPoint);
  * @param       Feedback_value ： 实际值
  * @retval      目标控制量
  */
-int32_t increment_pid_ctrl(PID_TypeDef *PID,float Feedback_value)
+float increment_pid_ctrl(PID_TypeDef *PID,float Feedback_value)
 {
     PID->Error = (float)(PID->SetPoint - Feedback_value);   /* 偏差值 */
     PID->Up = PID->Proportion * PID->Error;
@@ -67,5 +67,5 @@ int32_t increment_pid_ctrl(PID_TypeDef *PID,float Feedback_value)
     PID->ActualValue = PID->Up + PID->Ui + PID->Ud;
     LIMIT_OUT(PID->ActualValue,PID->OutMax,PID->OutMin);
     PID->LastError = PID->Error;
-    return ((int32_t)(PID->ActualValue));                   /* 返回实际控制数值 */
+    return ((PID->ActualValue));                   /* 返回实际控制数值 */
 }

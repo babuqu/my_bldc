@@ -59,7 +59,10 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOB, PM1_PWM_UL_Pin|PM1_PWM_VL_Pin|PM1_PWM_WL_Pin|EEPROM_EN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, PWM_SD_Pin|CTRL_SD_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(PWM_SD_GPIO_Port, PWM_SD_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(CTRL_SD_GPIO_Port, CTRL_SD_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin : LED_Pin */
   GPIO_InitStruct.Pin = LED_Pin;

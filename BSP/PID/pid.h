@@ -30,9 +30,9 @@
 /* PID相关参数 */
 
 /*定义PID参数相关宏*/
-#define  KP      0.05000f           /* P参数*/
-#define  KI      0.00025f           /* I参数*/
-#define  KD      0.000150f          /* D参数*/
+#define  KP      0.00005000f           /* P参数*/
+#define  KI      0.000025f           /* I参数*/
+#define  KD      0.0000150f          /* D参数*/
 #define SMAPLSE_PID_SPEED  40       /* 采样率 单位ms */
 
 /*定义位置PID参数相关宏*/
@@ -63,5 +63,5 @@ extern float *user_setpoint;
 /******************************************************************************************/
 /* 外部接口函数*/
 void pid_init(void);
-int32_t increment_pid_ctrl(PID_TypeDef *PID,float Feedback_value);
+float increment_pid_ctrl(PID_TypeDef *PID,float Feedback_value);
 #endif

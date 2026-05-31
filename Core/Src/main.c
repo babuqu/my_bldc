@@ -129,6 +129,7 @@ int main(void)
   MX_TIM6_Init();
   MX_CAN1_Init();
   /* USER CODE BEGIN 2 */
+	pid_init();
 	// ADC 
   HAL_ADC_Start_DMA(&hadc1, 
                      (uint32_t*)g_adc_value, 

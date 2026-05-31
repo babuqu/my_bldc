@@ -46,7 +46,7 @@ static uint32_t count_j = 0;                    /* 运行时间 */
  */
 void zero_ctr_loop(void)
 {
-    if(g_bldc_motor1.run_flag == RUN)
+    if(g_bldc_motor1.run_flag == RUN)//如果开始运行
     {
         switch(g_zero_ctr_status)
         {
@@ -273,7 +273,7 @@ uint8_t hallless_sw(void)
                 g_hallless_three.Speed_RPM = -((uint32_t)SPEED_COEFF/count_j);
             FirstOrderRC_LPF(g_bldc_motor1.speed,g_hallless_three.Speed_RPM,0.2379);
         }
-        g_hallless_three.Filter_Delay = count_j/ 10;/* 实际需延迟时间 */
+        g_hallless_three.Filter_Delay = count_j/ 30;/* 实际需延迟时间 */
         g_hallless_three.Filter_Count = 0;
         count_j = 0;
         count_i++;                              /* 捕捉过零点，累计次数 */
@@ -288,13 +288,13 @@ uint8_t hallless_sw(void)
         g_hallless_three.Filter_Count++;        /* 不换相时间累计 超时则判定速度为0*/
         if(g_hallless_three.Filter_Count > 15000)
         {
-            //g_hallless_three.Filter_Count = 0;
-            //g_hallless_three.Speed_RPMF = 0;    /* 超时换向 判定为停止 速度为0*/
-            //g_bldc_motor1.locked_rotor = 1;
-            //stop_motor1();
-            //g_bldc_motor1.run_flag = STOP;      /* 标记停机*/
-            //g_bldc_motor1.pwm_duty = 0;
-					  g_bldc_motor1.pwm_duty = 1000;
+            g_hallless_three.Filter_Count = 0;
+            g_hallless_three.Speed_RPMF = 0;    /* 超时换向 判定为停止 速度为0*/
+            g_bldc_motor1.locked_rotor = 1;
+            stop_motor1();
+            g_bldc_motor1.run_flag = STOP;      /* 标记停机*/
+            g_bldc_motor1.pwm_duty = 0;
+					  //g_bldc_motor1.pwm_duty = 1000;
         }
     }
     /************************************** 过零控制 ***************************************/

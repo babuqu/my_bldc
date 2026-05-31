@@ -29,6 +29,8 @@
 #include "usart.h"
 #include <string.h>
 #include "adc.h"
+#include "pid.h"
+#include "bldc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -68,7 +70,7 @@ const osThreadAttr_t CommutationTask_attributes = {
   .cb_size = sizeof(CommutationTaskControlBlock),
   .stack_mem = &CommutationTaskBuffer[0],
   .stack_size = sizeof(CommutationTaskBuffer),
-  .priority = (osPriority_t) osPriorityRealtime7,
+  .priority = (osPriority_t) osPriorityHigh7,
 };
 /* Definitions for BEMF_Task */
 osThreadId_t BEMF_TaskHandle;
@@ -234,10 +236,12 @@ void BEMF_Task_Fun(void *argument)
 void SpeedTaskFun(void *argument)
 {
   /* USER CODE BEGIN SpeedTaskFun */
+	
   /* Infinite loop */
   for(;;)
   {
 		//uart_print("SpeedTask\r\n");
+		
     osDelay(1);
   }
   /* USER CODE END SpeedTaskFun */
@@ -275,7 +279,7 @@ void StartupTaskFun(void *argument)
 void MonitorTaskFun(void *argument)
 {
   /* USER CODE BEGIN MonitorTaskFun */
-  //"Monitor":��ء�����ϵͳ״̬����Դʹ�����
+
   uint8_t ch;
   static uint8_t uartBuf[UART_BUF_LEN];  
   static uint8_t uartIndex = 0;          
@@ -285,40 +289,43 @@ void MonitorTaskFun(void *argument)
 	extern GetValue_t sensor_data;
 	static uint8_t txBuf[UART_TX_BUF_LEN];
 	TickType_t lastTick = 0;
-	
+	g_speed_pid.SetPoint = -3000;
   /* Infinite loop */
   for(;;)
   {
 			
-       // ÿ�� 1 ���ӡһ��ջʣ��ռ�
+
         if ((xTaskGetTickCount() - lastTick) > 1000)
         {
             lastTick = xTaskGetTickCount();
-
-            // ��ӡÿ������ʣ��ջ�ռ�
             UartPrintf("MonitorTask free stack: %u\r\n",
                        uxTaskGetStackHighWaterMark(MonitorTaskHandle));
 //					  UartPrintf("CommutationTaskHandle free stack: %u\r\n",
 //                       uxTaskGetStackHighWaterMark(CommutationTaskHandle));
-					  //adc_temp = (g_adc_u_value[8]-0.76f)/0.0025f+25;  // �ȸ�ֵ���ֲ�����
+					  //adc_temp = (g_adc_u_value[8]-0.76f)/0.0025f+25;  
 					  UartPrintf("ntc  :  %.2f\t", sensor_data.ntc);
             UartPrintf("temperature : %.2f\r\n", sensor_data.temperature);
 					
-					  UartPrintf("emf_m : %.2f\t", sensor_data.emf_m);
-					  UartPrintf("emf_u : %.2f\t", sensor_data.emf_u);
-					  UartPrintf("emf_v : %.2f\t", sensor_data.emf_v);
-					  UartPrintf("emf_w : %.2f\r\n", sensor_data.emf_w);
+//					  UartPrintf("emf_m : %.2f\t", sensor_data.emf_m);
+//					  UartPrintf("emf_u : %.2f\t", sensor_data.emf_u);
+//					  UartPrintf("emf_v : %.2f\t", sensor_data.emf_v);
+//					  UartPrintf("emf_w : %.2f\r\n", sensor_data.emf_w);
 					
-					  UartPrintf("i_u : %.2f\t", sensor_data.i_u);
-					  UartPrintf("i_v : %.2f\t", sensor_data.i_v);
-					  UartPrintf("i_w : %.2f\r\n", sensor_data.i_w);
+//					  UartPrintf("i_u : %.2f\t", sensor_data.i_u);
+//					  UartPrintf("i_v : %.2f\t", sensor_data.i_v);
+//					  UartPrintf("i_w : %.2f\r\n", sensor_data.i_w);
 					
-					  UartPrintf("v12 : %.2f\t", sensor_data.v12);
-					  UartPrintf("v5  :  %.2f\t", sensor_data.v5);
-					  UartPrintf("Vbus_v : %.2f\r\n", sensor_data.Vbus_v);		
+//					  UartPrintf("v12 : %.2f\t", sensor_data.v12);
+//					  UartPrintf("v5  :  %.2f\t", sensor_data.v5);
+//					  UartPrintf("Vbus_v : %.2f\r\n", sensor_data.Vbus_v);	
+						
+						
+            UartPrintf("SPEED_RPM : %d\r\n", g_bldc_motor1.speed);
+            UartPrintf("PID_SetPoint : %.2f\r\n", g_speed_pid.SetPoint);	
+            UartPrintf("PID_OUT : %.2f\r\n", g_speed_pid.ActualValue);						
         }
 				
-        //��ѯ���ڽ��ն���
+        
         if (xQueueReceive(uartRxQueue, &ch, 0) == pdPASS)
         {
             if (uartIndex < UART_BUF_LEN - 1) 
@@ -333,14 +340,14 @@ void MonitorTaskFun(void *argument)
             {
                 uartBuf[uartIndex] = 0; 
                 uartIndex = 0;           
-							  UartPrintf("%s", uartBuf);//����ʵ������printf����
-							  //�ӽ�������
+							  UartPrintf("%s", uartBuf);
+							  
 							
             }
 						lastCh = ch; 
         }
 				
-				//��ѯ���ڷ��Ͷ���
+				
 				if (xQueueReceive(uartTxQueue, txBuf, 0) == pdPASS)
         {
             uint16_t txLen = 0U;

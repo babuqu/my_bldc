@@ -97,7 +97,7 @@ void MX_TIM1_Init(void)
   sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
   sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
   sBreakDeadTimeConfig.DeadTime = 0;
-  sBreakDeadTimeConfig.BreakState = TIM_BREAK_ENABLE;
+  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
   sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_LOW;
   sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_ENABLE;
   if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
@@ -372,8 +372,9 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
 /* USER CODE BEGIN 1 */
 /**********************************************************************************************/
 int32_t temp_pwm1 = 0.0;                                /* 存放速度环PID结果 */
-int32_t motor_pwm_s = 0;                                /*  一阶滤波结果*/
-
+//int32_t motor_pwm_s = 0;                                /*  一阶滤波结果*/
+float motor_pwm_s = 0; 
+//float motor_pwm_sL = 0;
 /*停机状态下电流采集使用  */
 #define ADC_AMP_OFFSET_TIMES 50
 uint16_t adc_amp_offset[3][ADC_AMP_OFFSET_TIMES+1];
@@ -390,6 +391,23 @@ volatile uint16_t adc_val_m1[ADC_CH_NUM];
  * @param       
  * @retval      
  */
+ 
+
+ float MY_FirstOrderRC_LPF(float Yn_1,float Xn,float a){
+     
+    	 Yn_1 = (1-a)*Yn_1 + a*(float)Xn;
+	    if(Yn_1 <0&&Yn_1 >= -600) {
+			  return  -600.0;
+			}else if(Yn_1 >0&&Yn_1 <= 600) 
+			{
+			  return	600.0;
+			}else
+			{
+			  return	Yn_1;
+			}
+ }
+ 
+ 
 void HAL_TIM_PeriodElapsedCallback_MY(TIM_HandleTypeDef *htim)
 {
     uint8_t i;
@@ -419,25 +437,30 @@ void HAL_TIM_PeriodElapsedCallback_MY(TIM_HandleTypeDef *htim)
 //#ifdef H_PWM_L_ON
         /* 过零点检测*/
         zero_ctr_loop();
-
+         //g_zero_ctr_status=3;
         /***************************** 速度环PID控制 *****************************/
         if(g_bldc_motor1.run_flag == RUN && g_zero_ctr_status == 3) /* ¾ßÓÐÒ»¶¨ËÙ¶È£¨ÓÐËÙ¶È²âÁ¿ËµÃ÷ÒÑ¾­½øÈë¹ýÁã±Õ»·×´Ì¬£©ºó²ÅÄÜ½øÈëPID±Õ»·¿ØÖÆ */
         {
                 temp_pwm1 = increment_pid_ctrl(&g_speed_pid,g_bldc_motor1.speed);
-                FirstOrderRC_LPF(motor_pwm_s,temp_pwm1,0.085);
+
+                //FirstOrderRC_LPF(motor_pwm_s,(float)temp_pwm1,0.085);
+					       motor_pwm_s = MY_FirstOrderRC_LPF(motor_pwm_s,(float)temp_pwm1,0.085);
                 /* 最低速度限制 */
                 if(motor_pwm_s < 0)
                 {
                     /* 加速启动速度 */
-                    if(motor_pwm_s >= -600)
-                        motor_pwm_s = -600;
-                    g_bldc_motor1.pwm_duty = -motor_pwm_s;          /* 取绝对值*/
+//									  if(motor_pwm_s >= -600) {
+//										    motor_pwm_s = -600;
+//                    }
+                    g_bldc_motor1.pwm_duty = -(int32_t)motor_pwm_s;          /* 取绝对值*/
                 }
                 else
                 {
-                    if(motor_pwm_s <= 600)
-                        motor_pwm_s = 600;
-                    g_bldc_motor1.pwm_duty = motor_pwm_s;
+									    /* 加速启动速度 */
+//									  if(motor_pwm_s <= 600) {
+//										    motor_pwm_s = 600;
+//                    }
+                    g_bldc_motor1.pwm_duty = (int32_t)motor_pwm_s;
                 }
         }
 
