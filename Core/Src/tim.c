@@ -412,7 +412,7 @@ void HAL_TIM_PeriodElapsedCallback_MY(TIM_HandleTypeDef *htim)
 {
     uint8_t i;
     static uint8_t times_count = 0;                     /* 定时器时间记录*/
-    if(htim->Instance == TIM1)                 /* 55us */
+    if(htim->Instance == TIM1)                          /* 55us */
     {
 			  g_bldc_motor1.run_flag = RUN;//调试使用
         if(g_bldc_motor1.run_flag == RUN)
@@ -515,6 +515,12 @@ void HAL_TIM_PeriodElapsedCallback_MY(TIM_HandleTypeDef *htim)
 #endif
             times_count = 0;
         }
-    }
+
+}
+		if(htim->Instance == TIM2)
+    {
+		   ;                        //used by modbus
+    }	
+
 }
 /* USER CODE END 1 */

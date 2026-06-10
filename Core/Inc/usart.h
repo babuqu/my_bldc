@@ -30,7 +30,12 @@ extern "C" {
 
 /* USER CODE BEGIN Includes */
 typedef uint8_t (*uart_rx_callback_t)(UART_HandleTypeDef *huart, uint8_t byte, void *user_ctx);
-
+typedef struct
+{
+    uint8_t buf[256];
+    uint16_t len;
+	  uint8_t status;
+}UART_Frame_t;// data store for uart
 /* USER CODE END Includes */
 
 extern UART_HandleTypeDef huart1;
@@ -38,10 +43,12 @@ extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN Private defines */
-#define UART_TX_BUF_LEN 128    
-#define UART_TX_QUEUE_LEN 64  
+#define UART_TX_BUF_LEN 128     
 #define UART_BUF_LEN 64
 #define UART1_RX_DMA_BUF_LEN 64
+HAL_StatusTypeDef Uart_SendDMA(UART_HandleTypeDef *huart,
+                               uint8_t *buf,
+                               uint16_t len);
 /* USER CODE END Private defines */
 
 void MX_USART1_UART_Init(void);

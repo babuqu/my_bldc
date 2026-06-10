@@ -27,16 +27,16 @@
 #include <stdarg.h>
 #include <stdio.h>   // vsnprintf
 
-extern QueueHandle_t uartTxQueue;
 
+UART_Frame_t UART_Rx_Data;
+UART_Frame_t UART_Tx_Data;
 static uint8_t usart1_rx_dma_buf[UART1_RX_DMA_BUF_LEN];
-static uart_rx_callback_t usart1_rx_callback = NULL;
-static void *usart1_rx_user_ctx = NULL;
 /* USER CODE END 0 */
 
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart1_rx;
+DMA_HandleTypeDef hdma_usart1_tx;
 
 /* USART1 init function */
 
@@ -130,7 +130,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     hdma_usart1_rx.Init.MemInc = DMA_MINC_ENABLE;
     hdma_usart1_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
     hdma_usart1_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
-    hdma_usart1_rx.Init.Mode = DMA_CIRCULAR;
+    hdma_usart1_rx.Init.Mode = DMA_NORMAL;
     hdma_usart1_rx.Init.Priority = DMA_PRIORITY_HIGH;
     hdma_usart1_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
     if (HAL_DMA_Init(&hdma_usart1_rx) != HAL_OK)
@@ -139,6 +139,24 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     }
 
     __HAL_LINKDMA(uartHandle,hdmarx,hdma_usart1_rx);
+
+    /* USART1_TX Init */
+    hdma_usart1_tx.Instance = DMA2_Stream7;
+    hdma_usart1_tx.Init.Channel = DMA_CHANNEL_4;
+    hdma_usart1_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    hdma_usart1_tx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_usart1_tx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_usart1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_usart1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_usart1_tx.Init.Mode = DMA_NORMAL;
+    hdma_usart1_tx.Init.Priority = DMA_PRIORITY_HIGH;
+    hdma_usart1_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&hdma_usart1_tx) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(uartHandle,hdmatx,hdma_usart1_tx);
 
     /* USART1 interrupt Init */
     HAL_NVIC_SetPriority(USART1_IRQn, 5, 0);
@@ -195,6 +213,7 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 
     /* USART1 DMA DeInit */
     HAL_DMA_DeInit(uartHandle->hdmarx);
+    HAL_DMA_DeInit(uartHandle->hdmatx);
 
     /* USART1 interrupt Deinit */
     HAL_NVIC_DisableIRQ(USART1_IRQn);
@@ -225,23 +244,15 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 }
 
 /* USER CODE BEGIN 1 */
-void Uart_RegisterRxCallback(UART_HandleTypeDef *huart, uart_rx_callback_t callback, void *user_ctx)
-{
-    if (huart == &huart1)
-    {
-        usart1_rx_callback = callback;//�ص���������
-        usart1_rx_user_ctx = user_ctx;//�������
-    }
-}
 
 HAL_StatusTypeDef Uart_StartRxToIdleDMA(UART_HandleTypeDef *huart)
 {
-    if (huart == &huart1)//������ȷ
+    if (huart == &huart1)//
     {
-			  //���� UART �� DMA ���գ�����⵽���ڿ�����ʱ�Զ�ֹͣ���ա�
+			  //
         HAL_StatusTypeDef status = HAL_UARTEx_ReceiveToIdle_DMA(&huart1, usart1_rx_dma_buf, UART1_RX_DMA_BUF_LEN);
         if (status == HAL_OK)
-        {//�ر�dmaʹ��
+        {//
             __HAL_DMA_DISABLE_IT(&hdma_usart1_rx, DMA_IT_HT);
         }
         return status;
@@ -249,27 +260,31 @@ HAL_StatusTypeDef Uart_StartRxToIdleDMA(UART_HandleTypeDef *huart)
 
     return HAL_ERROR;
 }
-//��������ɻ򴮿ڿ���ʱ,���յ������¼�����
+//uart read data event callback function
+/* Callback triggered when DMA receives data (or idle line is detected). */
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
     if (huart->Instance == USART1)
     {
-        if ((usart1_rx_callback != NULL) && (Size > 0U))
-        {
-            uint16_t i = 0U;
-            for (i = 0U; i < Size; i++)
-            {   //��ÿ���ֽڵ���ע��Ļص�����Uart1RxQueueCallback(),�������д����
-                if (usart1_rx_callback(huart, usart1_rx_dma_buf[i], usart1_rx_user_ctx) != 0U)
-                {
-                    xHigherPriorityTaskWoken = pdTRUE;
-                }
-            }
-        }
-        (void)Uart_StartRxToIdleDMA(&huart1);//����DMA
+			if(Size > 0)
+			{
+					if(Size > sizeof(UART_Rx_Data.buf))
+					{
+						 Size = sizeof(UART_Rx_Data.buf);
+					}
+					memcpy(//copy data
+						UART_Rx_Data.buf,
+						usart1_rx_dma_buf,
+						Size);
+					UART_Rx_Data.len = Size;
+					UART_Rx_Data.status = 1;
+				 
+			 }
+        (void)Uart_StartRxToIdleDMA(&huart1);//again DMA
     }
-    //ISR����,֪ͨRTOS���������л������и������ȼ���������������л�
+
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
@@ -281,54 +296,46 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     }
 }
 
-void uart_print(const char *str)
+HAL_StatusTypeDef Uart_SendDMA(UART_HandleTypeDef *huart,
+                               uint8_t *buf,
+                               uint16_t len)
 {
-    HAL_UART_Transmit(&huart1, (uint8_t *)str, strlen(str), 100);
+    if(buf == NULL || len == 0)
+    {
+        return HAL_ERROR;
+    }
+
+    return HAL_UART_Transmit_DMA(
+                huart,
+                buf,
+                len);
+}
+
+uint16_t Modbus_CRC16(uint8_t *buf, uint16_t len)
+{
+    uint16_t crc = 0xFFFF;
+
+    for(uint16_t pos = 0; pos < len; pos++)
+    {
+        crc ^= (uint16_t)buf[pos];
+
+        for(uint8_t i = 0; i < 8; i++)
+        {
+            if(crc & 0x0001)
+            {
+                crc >>= 1;
+                crc ^= 0xA001;
+            }
+            else
+            {
+                crc >>= 1;
+            }
+        }
+    }
+
+    return crc;
 }
 
 
-void UartSendData(uint8_t *data, uint16_t len)
-{
-    if ((data == NULL) || (len == 0U))
-    {
-        return;
-    }
-
-    if (len >= UART_TX_BUF_LEN)
-    {
-        len = UART_TX_BUF_LEN - 1U;
-    }
-
-    uint8_t buf[UART_TX_BUF_LEN] = {0};
-    memcpy(buf, data, len);
-    buf[len] = '\0';
-
-    if ((uartTxQueue != NULL) && (xQueueSend(uartTxQueue, buf, 0) == pdPASS))
-    {
-        return;
-    }
-
-    /* Fallback to blocking TX when queue is unavailable/full. */
-    (void)HAL_UART_Transmit(&huart1, buf, len, 100);
-}
-void UartPrintf(const char *fmt, ...)
-{
-    if (fmt == NULL)
-    {
-        return;
-    }
-
-    char buf[UART_TX_BUF_LEN];
-    va_list args;
-    va_start(args, fmt);
-    int len = vsnprintf(buf, sizeof(buf), fmt, args);  
-    va_end(args);
-
-    if (len > 0)
-    {
-        if (len >= UART_TX_BUF_LEN) len = UART_TX_BUF_LEN - 1;
-        UartSendData((uint8_t*)buf, (uint16_t)len);
-    }
-}
 
 /* USER CODE END 1 */

@@ -31,7 +31,6 @@
 /* USER CODE BEGIN Includes */
 #include "FreeRTOS.h"
 #include "task.h"
-#include "queue.h"
 #include "bldc.h"
 #include "pid.h"
 #include "zero_ctr.h"
@@ -57,9 +56,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-//uart use
-QueueHandle_t uartRxQueue;
-QueueHandle_t uartTxQueue;
+
 //ADC use
 extern uint16_t g_adc_value[ADC_SUM];  
 /* USER CODE END PV */
@@ -73,18 +70,7 @@ void MX_FREERTOS_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-//1. �� `Uart1RxQueueCallback()` �У����ֽ�ͨ�� `xQueueSendFromISR()` ���͵� `uartRxQueue` ����
 
-static uint8_t Uart1RxQueueCallback(UART_HandleTypeDef *huart, uint8_t byte, void *user_ctx)
-{
-  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-  QueueHandle_t rxQueue = (QueueHandle_t)user_ctx;
-
-  (void)huart;
-  (void)xQueueSendFromISR(rxQueue, &byte, &xHigherPriorityTaskWoken);//向队列中写入数据
-
-  return (xHigherPriorityTaskWoken == pdTRUE) ? 1U : 0U;
-}
 
 /* USER CODE END 0 */
 
@@ -96,8 +82,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-  uartRxQueue = xQueueCreate(64, sizeof(uint8_t));
-  uartTxQueue = xQueueCreate(UART_TX_QUEUE_LEN, UART_TX_BUF_LEN);
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -134,7 +119,7 @@ int main(void)
   HAL_ADC_Start_DMA(&hadc1, 
                      (uint32_t*)g_adc_value, 
                      ADC_SUM);
-	Uart_RegisterRxCallback(&huart1, Uart1RxQueueCallback, uartRxQueue);//注册串口，函数名称，队列
+
   (void)Uart_StartRxToIdleDMA(&huart1);//开启DMA接收
   /* USER CODE END 2 */
 
@@ -149,6 +134,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+	//modbus_init();
   while (1)
   {
     /* USER CODE END WHILE */

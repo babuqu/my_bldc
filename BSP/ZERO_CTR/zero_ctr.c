@@ -124,10 +124,8 @@ void zero_ctr_loop(void)
  */
 void zero_ctr_init(void)
 {
-    g_zero_ctr_status = 2;
-	
-	
-	  //g_zero_ctr_status = 0;
+    //g_zero_ctr_status = 2;
+	  g_zero_ctr_status = 0;
     g_delay_temp = 0;
     g_vvvf_sp.Count = 0;
     g_vvvf_sp.VvvF_Count = 0;
@@ -273,7 +271,7 @@ uint8_t hallless_sw(void)
                 g_hallless_three.Speed_RPM = -((uint32_t)SPEED_COEFF/count_j);
             FirstOrderRC_LPF(g_bldc_motor1.speed,g_hallless_three.Speed_RPM,0.2379);
         }
-        g_hallless_three.Filter_Delay = count_j/ 30;/* 实际需延迟时间 */
+        g_hallless_three.Filter_Delay = count_j/ 10;/* 实际需延迟时间 */
         g_hallless_three.Filter_Count = 0;
         count_j = 0;
         count_i++;                              /* 捕捉过零点，累计次数 */

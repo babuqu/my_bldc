@@ -279,89 +279,37 @@ void StartupTaskFun(void *argument)
 void MonitorTaskFun(void *argument)
 {
   /* USER CODE BEGIN MonitorTaskFun */
-
-  uint8_t ch;
-  static uint8_t uartBuf[UART_BUF_LEN];  
-  static uint8_t uartIndex = 0;          
-	static uint8_t lastCh = 0;        
-  extern QueueHandle_t uartRxQueue;
-	extern QueueHandle_t uartTxQueue;
-	extern GetValue_t sensor_data;
-	static uint8_t txBuf[UART_TX_BUF_LEN];
+	extern GetValue_t sensor_data;//adc data
+	extern UART_Frame_t UART_Rx_Data;//uart data
+	extern UART_Frame_t UART_Tx_Data;//uart data
 	TickType_t lastTick = 0;
 	g_speed_pid.SetPoint = -3000;
   /* Infinite loop */
   for(;;)
   {
-			
-
+			//get data test code.
+				if(UART_Rx_Data.status)
+				{
+						UART_Rx_Data.status = 0;
+//						HAL_UART_Transmit(
+//								&huart1,
+//								UART_Rx_Data.buf,
+//								UART_Rx_Data.len,
+//								100);
+					Uart_SendDMA(&huart1,
+                       UART_Rx_Data.buf,
+                       UART_Rx_Data.len);
+				}
+				
+				
         if ((xTaskGetTickCount() - lastTick) > 1000)
         {
             lastTick = xTaskGetTickCount();
-            UartPrintf("MonitorTask free stack: %u\r\n",
-                       uxTaskGetStackHighWaterMark(MonitorTaskHandle));
-//					  UartPrintf("CommutationTaskHandle free stack: %u\r\n",
-//                       uxTaskGetStackHighWaterMark(CommutationTaskHandle));
-					  //adc_temp = (g_adc_u_value[8]-0.76f)/0.0025f+25;  
-					  UartPrintf("ntc  :  %.2f\t", sensor_data.ntc);
-            UartPrintf("temperature : %.2f\r\n", sensor_data.temperature);
-					
-//					  UartPrintf("emf_m : %.2f\t", sensor_data.emf_m);
-//					  UartPrintf("emf_u : %.2f\t", sensor_data.emf_u);
-//					  UartPrintf("emf_v : %.2f\t", sensor_data.emf_v);
-//					  UartPrintf("emf_w : %.2f\r\n", sensor_data.emf_w);
-					
-//					  UartPrintf("i_u : %.2f\t", sensor_data.i_u);
-//					  UartPrintf("i_v : %.2f\t", sensor_data.i_v);
-//					  UartPrintf("i_w : %.2f\r\n", sensor_data.i_w);
-					
-//					  UartPrintf("v12 : %.2f\t", sensor_data.v12);
-//					  UartPrintf("v5  :  %.2f\t", sensor_data.v5);
-//					  UartPrintf("Vbus_v : %.2f\r\n", sensor_data.Vbus_v);	
-						
-						
-            UartPrintf("SPEED_RPM : %d\r\n", g_bldc_motor1.speed);
-            UartPrintf("PID_SetPoint : %.2f\r\n", g_speed_pid.SetPoint);	
-            UartPrintf("PID_OUT : %.2f\r\n", g_speed_pid.ActualValue);						
         }
 				
-        
-        if (xQueueReceive(uartRxQueue, &ch, 0) == pdPASS)
-        {
-            if (uartIndex < UART_BUF_LEN - 1) 
-            {
-                uartBuf[uartIndex++] = ch;
-            }
-						else
-            {
-                uartIndex = 0;
-            }
-            if (lastCh == '\r' && ch == '\n') 
-            {
-                uartBuf[uartIndex] = 0; 
-                uartIndex = 0;           
-							  UartPrintf("%s", uartBuf);
-							  
-							
-            }
-						lastCh = ch; 
-        }
-				
-				
-				if (xQueueReceive(uartTxQueue, txBuf, 0) == pdPASS)
-        {
-            uint16_t txLen = 0U;
-            while ((txLen < UART_TX_BUF_LEN) && (txBuf[txLen] != '\0'))
-            {
-              txLen++;
-            }
-            if (txLen > 0U)
-            {
-              HAL_UART_Transmit(&huart1, txBuf, txLen, 100);
-            }
-        }
+    
     osDelay(1);
-		//uart_print("MonitorTask\r\n");
+		
   }
   /* USER CODE END MonitorTaskFun */
 }
