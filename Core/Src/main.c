@@ -34,6 +34,7 @@
 #include "bldc.h"
 #include "pid.h"
 #include "zero_ctr.h"
+#include "param.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -115,6 +116,7 @@ int main(void)
   MX_CAN1_Init();
   /* USER CODE BEGIN 2 */
 	pid_init();
+	Param_InitDefault();
 	// ADC 
   HAL_ADC_Start_DMA(&hadc1, 
                      (uint32_t*)g_adc_value, 

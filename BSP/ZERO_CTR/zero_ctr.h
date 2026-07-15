@@ -49,7 +49,7 @@ typedef struct
     uint32_t    speed_coeff;        /* 速度系数 */
     uint8_t     Poles;              /* 电机极对数 */
     uint8_t     Move_State;         /* 电机旋转状态 */
-    int16_t    Speed_RPM;           /* 电机旋转速度 */
+    int16_t     Speed_RPM;          /* 电机旋转速度 */
     uint16_t    Speed_RPMF;         /* 电机旋转滤波速度 */
     uint16_t    Queue_Status[3];    /* 滤波 */
     uint16_t    Filter_Count;       /* 滤波计数 */

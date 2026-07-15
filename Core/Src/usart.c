@@ -278,8 +278,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 						UART_Rx_Data.buf,
 						usart1_rx_dma_buf,
 						Size);
-					UART_Rx_Data.len = Size;
-					UART_Rx_Data.status = 1;
+					UART_Rx_Data.len = Size;//get size
+					UART_Rx_Data.status = 1;//data  ready
 				 
 			 }
         (void)Uart_StartRxToIdleDMA(&huart1);//again DMA
@@ -311,30 +311,7 @@ HAL_StatusTypeDef Uart_SendDMA(UART_HandleTypeDef *huart,
                 len);
 }
 
-uint16_t Modbus_CRC16(uint8_t *buf, uint16_t len)
-{
-    uint16_t crc = 0xFFFF;
 
-    for(uint16_t pos = 0; pos < len; pos++)
-    {
-        crc ^= (uint16_t)buf[pos];
-
-        for(uint8_t i = 0; i < 8; i++)
-        {
-            if(crc & 0x0001)
-            {
-                crc >>= 1;
-                crc ^= 0xA001;
-            }
-            else
-            {
-                crc >>= 1;
-            }
-        }
-    }
-
-    return crc;
-}
 
 
 

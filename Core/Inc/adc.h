@@ -71,6 +71,7 @@ typedef struct {
 }GetValue_t;
 	
 extern uint16_t g_adc_value[ADC_SUM];
+extern GetValue_t sensor_data;
 /* USER CODE END Includes */
 
 extern ADC_HandleTypeDef hadc1;

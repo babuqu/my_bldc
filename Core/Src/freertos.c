@@ -31,6 +31,7 @@
 #include "adc.h"
 #include "pid.h"
 #include "bldc.h"
+#include "modbus.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -287,20 +288,28 @@ void MonitorTaskFun(void *argument)
   /* Infinite loop */
   for(;;)
   {
-			//get data test code.
-				if(UART_Rx_Data.status)
-				{
-						UART_Rx_Data.status = 0;
+//get data test code,test result is oK.
+//				if(UART_Rx_Data.status)
+//				{
+//						UART_Rx_Data.status = 0;
 //						HAL_UART_Transmit(
 //								&huart1,
 //								UART_Rx_Data.buf,
 //								UART_Rx_Data.len,
 //								100);
-					Uart_SendDMA(&huart1,
-                       UART_Rx_Data.buf,
-                       UART_Rx_Data.len);
-				}
+//					Uart_SendDMA(&huart1,
+//                       UART_Rx_Data.buf,
+//                       UART_Rx_Data.len);
+//				}
 				
+				if(UART_Rx_Data.status)
+				{
+						UART_Rx_Data.status = 0;
+
+						Modbus_Parse(
+								UART_Rx_Data.buf,
+								UART_Rx_Data.len);
+				}
 				
         if ((xTaskGetTickCount() - lastTick) > 1000)
         {

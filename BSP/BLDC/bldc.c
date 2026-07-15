@@ -116,8 +116,8 @@ pctr pfunclist_m1[6] =
     /*按过零信号（513264）换向 顺序如下*/
     /*逆时针换相顺序：(U+V-)->(U+W-)->(V+W-)->(V+U-)->(W+U-)->(W+V-)*/
     /*逆时针对应的过零信号：513264（5(U+V-)1(U+W-)3(V+W-)2(V+U-)6(W+U-)4(W+V-)）*/
-    &m1_uhwl, &m1_vhul, &m1_vhwl,
-    &m1_whvl, &m1_uhvl, &m1_whul
+    &m1_uhvl, &m1_vhwl, &m1_uhwl,
+    &m1_whul, &m1_whvl, &m1_vhul
 };
 
 /*顺时针旋转过零信号换向表（和顺时针旋转顺序相反）*/
@@ -127,8 +127,9 @@ pctr pfunclist_m2[6] =
     /*按过零信号（513264）换向 顺序如下*/
     /*5(W+V-)1(U+V-)3(U+W-)2(V+W-)6(V+U-)4(W+U-)*/
     /*顺时针对应的过零信号：546231（5(W+V-)->4(W+U-)->6(V+U-)->2(V+W-)->3(U+W-)->1(U+V-)）*/
-    &m1_uhvl, &m1_vhwl, &m1_uhwl,
-    &m1_whul, &m1_whvl, &m1_vhul       
+
+	  &m1_uhwl, &m1_vhul, &m1_vhwl,
+    &m1_whvl, &m1_uhvl, &m1_whul
 };
 
 /* 上下桥臂的导通情况，共6种，也称为6步换向 */
