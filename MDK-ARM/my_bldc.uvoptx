@@ -157,18 +157,18 @@
         <Bp>
           <Number>0</Number>
           <Type>0</Type>
-          <LineNumber>455</LineNumber>
+          <LineNumber>293</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>134231392</Address>
+          <Address>134243580</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
           <SizeOfObject>0</SizeOfObject>
           <BreakByAccess>0</BreakByAccess>
           <BreakIfRCount>1</BreakIfRCount>
-          <Filename>D:\work_dir\BLDC\soft\CODE\BLDC_HALLLESS\my_bldc - 閲嶅啓涓插彛浠ｇ爜\Core\Src\tim.c</Filename>
+          <Filename>D:\work_dir\BLDC\soft\CODE\BLDC_HALLLESS\my_bldc - 閲嶅啓涓插彛浠ｇ爜\BSP\ZERO_CTR\zero_ctr.c</Filename>
           <ExecCommand></ExecCommand>
-          <Expression>\\my_bldc\../Core/Src/tim.c\455</Expression>
+          <Expression>\\my_bldc\../BSP/ZERO_CTR/zero_ctr.c\293</Expression>
         </Bp>
       </Breakpoint>
       <WatchWindow1>

@@ -262,9 +262,9 @@ void StartupTaskFun(void *argument)
   for(;;)
   {
 		//uart_print("StartupTask\r\n");
-    osDelay(1000);
+    osDelay(500);
     HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
-		osDelay(1000);
+		osDelay(500);
 		HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
   }
   /* USER CODE END StartupTaskFun */

@@ -52,7 +52,7 @@ void zero_ctr_loop(void)
         {
             case 0:/* 定位：固定一相U+V-*/
             {
-                g_vvvf_sp.Voilage_Ref = (uint16_t)(MAX_PWM_DUTY/20);
+                g_vvvf_sp.Voilage_Ref = (uint16_t)(MAX_PWM_DUTY/20);//(MAX_PWM_DUTY/20)
                 g_bldc_motor1.pwm_duty = g_vvvf_sp.Voilage_Ref;
                 m1_uhvl();                      /* U+V- */
                 zero_ctr_init();
@@ -82,7 +82,7 @@ void zero_ctr_loop(void)
             break;
             case 2:                             /* 加速换相（提高换向频率）*/
             {
-                g_vvvf_sp.Freq_T_Ref -= g_vvvf_sp.Freq_T_Ref/15+1;/* 改变换向频率 */
+                g_vvvf_sp.Freq_T_Ref -= g_vvvf_sp.Freq_T_Ref/20+1;/* 改变换向频率 g_vvvf_sp.Freq_T_Ref/15+1;*/
                 g_vvvf_sp.Count++;
                 change_voltage();               /* 改变换向所需电压 */
                 if(g_vvvf_sp.Freq_T_Ref < 180)
