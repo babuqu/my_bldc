@@ -51,12 +51,13 @@ void zero_ctr_loop(void)
         switch(g_zero_ctr_status)
         {
             case 0:/* 定位：固定一相U+V-*/
-            {
-                g_vvvf_sp.Voilage_Ref = (uint16_t)(MAX_PWM_DUTY/20);//(MAX_PWM_DUTY/20)
+							{   //step1 : 这个电压主要影响开环启动转矩，最好可以开放参数
+                g_vvvf_sp.Voilage_Ref = (uint16_t)(MAX_PWM_DUTY/15);//(MAX_PWM_DUTY/20)
                 g_bldc_motor1.pwm_duty = g_vvvf_sp.Voilage_Ref;
                 m1_uhvl();                      /* U+V- */
                 zero_ctr_init();
-                g_vvvf_sp.Freq_T_Ref = 300;     /* 初始延迟时间为：55*300us，不同电机此参数不同 */
+							  //等Freq_T_Ref这么长时间之后再进行换相，定位完成后等待时间，带载情况下响应速度没那么快。
+                g_vvvf_sp.Freq_T_Ref = 2000;     /* 初始延迟时间为：55*300us，不同电机此参数不同 */
                 g_zero_ctr_status = 1;          /* 切换至延迟计数 */
                 count_i = 0;
                 switch_hallless = 0;
@@ -75,19 +76,19 @@ void zero_ctr_loop(void)
                 switch_hallless = hallless_sw();/* 检测过零信号 稳定后切换至闭环 */
                 if(switch_hallless == 1)
                 {
-                    g_zero_ctr_status = 3;
+                    g_zero_ctr_status = 3;//启动完成，进入转速闭环控制
                 }
 #endif
             }
             break;
             case 2:                             /* 加速换相（提高换向频率）*/
-            {
-                g_vvvf_sp.Freq_T_Ref -= g_vvvf_sp.Freq_T_Ref/20+1;/* 改变换向频率 g_vvvf_sp.Freq_T_Ref/15+1;*/
+            {   //逐渐减小换相时间，来提高转速
+                g_vvvf_sp.Freq_T_Ref -= g_vvvf_sp.Freq_T_Ref/15+1;/* 改变换向频率 g_vvvf_sp.Freq_T_Ref/15+1;*/
                 g_vvvf_sp.Count++;
                 change_voltage();               /* 改变换向所需电压 */
-                if(g_vvvf_sp.Freq_T_Ref < 180)
+                if(g_vvvf_sp.Freq_T_Ref < 200)
                 {
-                    g_vvvf_sp.Freq_T_Ref = 180; /* 固定次频率（延迟时间），不同电机此参数有差异4对级的可设置150 */
+                    g_vvvf_sp.Freq_T_Ref = 200; /* 固定次频率（延迟时间），不同电机此参数有差异4对级的可设置150 */
                     g_zero_ctr_status = 1;      /* 切换至延迟计数*/
                 }
                 else
@@ -292,6 +293,9 @@ uint8_t hallless_sw(void)
             stop_motor1();
             g_bldc_motor1.run_flag = STOP;      /* 标记停机*/
             g_bldc_motor1.pwm_duty = 0;
+					 //失败后重试
+//					  start_motor1();
+//					  g_zero_ctr_status = 0;
 					  //g_bldc_motor1.pwm_duty = 1000;
         }
     }
