@@ -116,7 +116,7 @@ int main(void)
   MX_CAN1_Init();
   /* USER CODE BEGIN 2 */
 	pid_init();
-	Param_InitDefault();
+	(void)Param_Init_();
 	// ADC 
   HAL_ADC_Start_DMA(&hadc1, 
                      (uint32_t*)g_adc_value, 

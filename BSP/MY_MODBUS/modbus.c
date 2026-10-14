@@ -1,4 +1,4 @@
-//modbus Ğ­ÒéÊµÏÖ
+//modbus åè®®å®ç°
 #include <stdio.h> 
 #include "usart.h"
 #include "modbus.h"
@@ -11,41 +11,56 @@
 
 static UART_Frame_t ModbusTx;
 
+/* å‚æ•°æäº¤æˆ–æŒä¹…åŒ–å¤±è´¥æ—¶ï¼ŒæŒ‰ Modbus å¼‚å¸¸å¸§æ ¼å¼å›å¤ä¸»ç«™ã€‚ */
+static void Modbus_SendException(uint8_t slave, uint8_t function, uint8_t exception)
+{
+    uint16_t crc;
+
+    ModbusTx.buf[0] = slave;
+    ModbusTx.buf[1] = (uint8_t)(function | 0x80u);
+    ModbusTx.buf[2] = exception;
+    crc = Modbus_CRC16(ModbusTx.buf, 3u);
+    ModbusTx.buf[3] = (uint8_t)crc;
+    ModbusTx.buf[4] = (uint8_t)(crc >> 8);
+    ModbusTx.len = 5u;
+    HAL_UART_Transmit_DMA(&huart1, ModbusTx.buf, ModbusTx.len);
+}
+
 uint16_t HoldingReg[HOLDING_REG_NUM] =
 {
-    0,  //g_speed_pid.Proportion   /* ±ÈÀı³£Êı Proportional Const*/ 
-    200,//g_speed_pid.Integral      /* »ı·Ö³£Êı Integral Const*/
-    300,//g_speed_pid.Derivative    /* Î¢·Ö³£Êı Derivative Const*/ 
-    400,//g_speed_pid.SetPoint      /* Éè¶¨Ä¿±êDesired Value*/
-    600,//g_speed_pid.IngMax = 8000;»ı·ÖÏà×î´óÏŞ·ù
-    700,//g_speed_pid.IngMin = 8000;»ı·ÖÏà×îĞ¡ÏŞ·ù
-    800,//g_speed_pid.OutMax = 8000;PIDÊä³ö×î´óÏŞ·ù
-    900,//g_speed_pid.OutMin = 8000;PIDÊä³ö×îĞ¡ÏŞ·ù
+    0,  //g_speed_pid.Proportion   /* æ¯”ä¾‹å¸¸æ•° Proportional Const*/ 
+    200,//g_speed_pid.Integral      /* ç§¯åˆ†å¸¸æ•° Integral Const*/
+    300,//g_speed_pid.Derivative    /* å¾®åˆ†å¸¸æ•° Derivative Const*/ 
+    400,//g_speed_pid.SetPoint      /* è®¾å®šç›®æ ‡Desired Value*/
+    600,//g_speed_pid.IngMax = 8000;ç§¯åˆ†ç›¸æœ€å¤§é™å¹…
+    700,//g_speed_pid.IngMin = 8000;ç§¯åˆ†ç›¸æœ€å°é™å¹…
+    800,//g_speed_pid.OutMax = 8000;PIDè¾“å‡ºæœ€å¤§é™å¹…
+    900,//g_speed_pid.OutMin = 8000;PIDè¾“å‡ºæœ€å°é™å¹…
     0
 };
 uint16_t InputReg[INPUT_REG_NUM];
 
 void InputReg_Publish(void)
 {
-    InputReg[0] = (int16_t)g_bldc_motor1.speed;//Êµ¼Ê×ªËÙ
+    InputReg[0] = (int16_t)g_bldc_motor1.speed;//å®é™…è½¬é€Ÿ
 
-    InputReg[1] = (int16_t)g_speed_pid.Error;//×ªËÙÎó²î
+    InputReg[1] = (int16_t)g_speed_pid.Error;//è½¬é€Ÿè¯¯å·®
 
-    InputReg[2] = (uint16_t)(10*sensor_data.Vbus_v);//Ä¸ÏßµçÑ¹
-    InputReg[3] = (uint16_t)(10*sensor_data.v12);//12VµçÑ¹
-    InputReg[4] = (uint16_t)(10*sensor_data.v5);//5VµçÑ¹
+    InputReg[2] = (uint16_t)(10*sensor_data.Vbus_v);//æ¯çº¿ç”µå‹
+    InputReg[3] = (uint16_t)(10*sensor_data.v12);//12Vç”µå‹
+    InputReg[4] = (uint16_t)(10*sensor_data.v5);//5Vç”µå‹
 
-    InputReg[5] = sensor_data.i_w;//wÏàµçÁ÷
-	  InputReg[6] = sensor_data.i_u;//uÏàµçÁ÷
-	  InputReg[7] = sensor_data.i_v;//vÏàµçÁ÷
+    InputReg[5] = sensor_data.i_w;//wç›¸ç”µæµ
+	  InputReg[6] = sensor_data.i_u;//uç›¸ç”µæµ
+	  InputReg[7] = sensor_data.i_v;//vç›¸ç”µæµ
 	
-	  InputReg[8] = sensor_data.temperature;//mcuÄÚ²¿ÎÂ¶È
+	  InputReg[8] = sensor_data.temperature;//mcuå†…éƒ¨æ¸©åº¦
 	
-	  InputReg[9] = sensor_data.temperature;//ntcÎÂ¶È
+	  InputReg[9] = sensor_data.temperature;//ntcæ¸©åº¦
 	
-	  InputReg[10] = sensor_data.emf_w;//wÏà·´Ïòµç¶¯ÊÆ
-	  InputReg[11] = sensor_data.emf_u;//uÏà·´Ïòµç¶¯ÊÆ
-	  InputReg[12] = sensor_data.emf_v;//vÏà·´Ïòµç¶¯ÊÆ	
+	  InputReg[10] = sensor_data.emf_w;//wç›¸åå‘ç”µåŠ¨åŠ¿
+	  InputReg[11] = sensor_data.emf_u;//uç›¸åå‘ç”µåŠ¨åŠ¿
+	  InputReg[12] = sensor_data.emf_v;//vç›¸åå‘ç”µåŠ¨åŠ¿	
 	
 }
 	 
@@ -79,16 +94,16 @@ void Modbus_Parse(uint8_t *buf, uint16_t len)
     switch(buf[1])
     {
         case 0x03:
-            Modbus_Func03(buf);//¶Á±£³Ö¼Ä´æÆ÷
+            Modbus_Func03(buf);//è¯»ä¿æŒå¯„å­˜å™¨
             break;
 				case 0x06:
-						Modbus_Func06(buf);//Ğ´µ¥¸ö¼Ä´æÆ÷
+						Modbus_Func06(buf);//å†™å•ä¸ªå¯„å­˜å™¨
 						break;
 				case 0x10: 
-					  Modbus_Func10(buf); //Ğ´¶à¸ö¼Ä´æÆ÷
+					  Modbus_Func10(buf); //å†™å¤šä¸ªå¯„å­˜å™¨
 				    break;
 				case 0x04:
-					  Modbus_Func04(buf);//Ö»¶Á¼Ä´æÆ÷
+					  Modbus_Func04(buf);//åªè¯»å¯„å­˜å™¨
 				    break;
         default:
             break;
@@ -101,7 +116,7 @@ void Modbus_Func03(uint8_t *rx)
     uint16_t num;
     uint16_t crc;
     uint16_t i;
-    Param_Publish(HoldingReg);//²ÎÊıÍ¬²½
+    Param_Publish(HoldingReg);//å‚æ•°åŒæ­¥
     addr =
         (rx[2] << 8)
         |
@@ -170,9 +185,13 @@ void Modbus_Func06(uint8_t *rx)
 
     HoldingReg[addr] = value;
 
-    //Í¬²½µ½Êµ¼Ê±äÁ¿
-    Param_Apply();
-    //06ÏìÓ¦Ö±½Ó»ØÏÔÇëÇóÖ¡
+    //åŒæ­¥åˆ°å®é™…å˜é‡
+    if (!Param_Apply(addr, 1u))
+    {
+        Modbus_SendException(rx[0], rx[1], 0x04u);
+        return;
+    }
+    //06å“åº”ç›´æ¥å›æ˜¾è¯·æ±‚å¸§
     memcpy(ModbusTx.buf,rx,6);
 
     crc = Modbus_CRC16(ModbusTx.buf,6);
@@ -228,7 +247,11 @@ void Modbus_Func10(uint8_t *rx)
 				HoldingReg[addr + i] = value;
 		}
 
-    Param_Apply();
+    if (!Param_Apply(addr, num))
+    {
+        Modbus_SendException(rx[0], rx[1], 0x04u);
+        return;
+    }
 
 		ModbusTx.buf[0] = MODBUS_SLAVE_ADDR;
 		ModbusTx.buf[1] = 0x10;

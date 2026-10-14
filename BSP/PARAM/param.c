@@ -1,314 +1,259 @@
-//²ÎÊı´æ´¢
-//²ÎÊıÍ¬²½
-//²ÎÊıĞ£Ñé
-//g_param ÊÇ²ÎÊıÔ´
-//HoldingReg ÊÇÍ¨Ñ¶¾µÏñ
-//g_speed_pid ÊÇÔËĞĞ¾µÏñ
-
-//1 ²ÎÊıÔ´£¨Î¨Ò»ÕæÖµ£©param_t g_param;
-
-//2 ²ÎÊıÓ³Éä±í  param_map_t g_map[]
-//   ²ÎÊı±äÁ¿
-//      ¡ı
-//   ¼Ä´æÆ÷µØÖ·
-//      ¡ı
-//   ·ÅËõ¹ØÏµ
-
-//3 ²ÎÊı·¢²¼
-//°ÑÄÚ²¿²ÎÊıÍ¬²½µ½ Modbus ¼Ä´æÆ÷¡£
-
-//4 ²ÎÊı¶ÁÈ¡
-//Param_UpdateFromModbus(HoldingReg);
-
-//5 ²ÎÊıĞ£Ñé
-//Param_Sanitize();·ÀÖ¹·Ç·¨²ÎÊı¡£
-
-//6 ²ÎÊıÏÂ·¢µ½¿ØÖÆÆ÷
-//Param_To_System(&g_param);
-
-//7 ÉÏµç³õÊ¼»¯
-//Flash¶ÁÈ¡
-//    ¡ı
-//¼ì²é±êÖ¾Î»
-//    ¡ı
-//²ÎÊıĞ£Ñé
-//    ¡ı
-//Ä¬ÈÏ²ÎÊı²¹³ä
-//    ¡ı
-//¸üĞÂPID
-//    ¡ı
-//·¢²¼¼Ä´æÆ÷
 #include "param.h"
-#include <stdio.h>
+#include "param_registry.h"
+#include <math.h>
+#include <stdint.h>
+#include <string.h>
 #include "pid.h"
-#include "modbus.h"
 
-
-#define PARAM_FLAG_DEFAULT 0xA5A5
+#define PARAM_FLAG_DEFAULT 0xA5A5u
 
 extern PID_TypeDef g_speed_pid;
+extern uint8_t ParamStorage_Load(void);
+extern uint8_t ParamStorage_Save(void);
 
-param_t g_param;
+param_t g_param;//å…¨å±€ç¼“å­˜å‚æ•°å˜é‡
 
-/* =========================
-   ²ÎÊıÓ³Éä±í£¨ºËĞÄ£©
-   ========================= */
-static param_map_t g_map[] =
+/* æŒ‰ç»Ÿä¸€å®šä¹‰è¡¨ä¸‹æ ‡å–å­—æ®µåœ°å€ï¼›è¡¨é¡¹è´Ÿè´£æä¾›å”¯ä¸€çš„å­—æ®µåç§»ã€‚ */
+static uint8_t *Param_StateField(param_t *state, const param_desc_t *desc)
 {
-	  //²ÎÊı-¼Ä´æÆ÷µØÖ·-·ÅËõÏµÊı
-    {&g_param.set_speed,0,1.0f,PARAM_S16},
-
-    {&g_param.kp,1,100000.0f,PARAM_FLOAT},
-    {&g_param.ki,2,100000.0f,PARAM_FLOAT},
-    {&g_param.kd,3,100000.0f,PARAM_FLOAT},
-
-    {&g_param.i_max,4,1.0f,PARAM_S16},
-    {&g_param.i_min,5,1.0f,PARAM_S16},
-
-    {&g_param.out_max,6,1.0f,PARAM_S16},
-    {&g_param.out_min,7,1.0f,PARAM_S16},
-		//{&g_param.flag,4, 1.0f},
-};
-
-//²ÎÊıºÏÀíĞÔ¼ì²é
-uint8_t Param_Sanitize(param_t *p)
-{
-    uint8_t ret = 0;
-    if (!p) return 0;
-
-    if (p->kp < 0) {p->kp = 0; ret = 1;}//Õâ¸öµØ·½³¬³ö·¶Î§ºó£¬Ó¦¸ÃÊ¹ÓÃÄ¬ÈÏÖµ
-    if (p->kp > 6.55) {p->kp = 6.55; ret = 1;}
-
-    if (p->ki < 0) {p->ki = 0; ret = 1;}
-    if (p->ki > 6.55) {p->ki = 6.55; ret = 1;}
-
-    if (p->kd < 0) {p->kd = 0; ret = 1;}
-    if (p->kd > 6.55) {p->kd = 6.55; ret = 1;}
-
-    if (p->i_max <= p->i_min)
+    if (state == NULL || desc == NULL || desc->state_offset == PARAM_NO_STATE_OFFSET)
     {
-        p->i_max = p->i_min + 1;
-        ret = 1;
+        return NULL;
+    }
+    return (uint8_t *)state + desc->state_offset;
+}
+
+/* å°†å½“å‰è¿è¡ŒçŠ¶æ€éœ€è¦æ‰ç”µå­˜å‚¨çš„å˜é‡å‚æ•°å…¨éƒ¨é€é¡¹åŒæ­¥åˆ° registryï¼›èŒƒå›´å’Œç±»å‹ç”±ç»Ÿä¸€å®šä¹‰è¡¨æ ¡éªŒã€‚ */
+static uint8_t Param_RegistrySync(param_t *state)
+{
+    uint16_t i;
+
+    if (state == NULL || ParamRegistry_Init() != 0)
+    {
+        return 0u; /* å‚æ•°çŠ¶æ€æ— æ•ˆæˆ–å®šä¹‰è¡¨åˆå§‹åŒ–å¤±è´¥ã€‚ */
     }
 
-    if (p->out_max <= p->out_min)
+    for (i = 0u; i < ParamRegistry_Count(); ++i)
     {
-        p->out_max = p->out_min + 1;
-        ret = 1;
-    }
-		
-    return ret;
-}
+        const param_desc_t *desc = ParamRegistry_GetAt(i);
+        uint8_t *field = Param_StateField(state, desc);
+        double value;
 
-
-
-#define MAP_SIZE (sizeof(g_map)/sizeof(g_map[0]))
-//³õÊ¼²ÎÊıÎªÏµÍ³Ê¹ÓÃ²ÎÊı
-void Param_InitDefault()
-{
-  
-
-    g_param.kp = KP;
-    g_param.ki = KI;
-    g_param.kd = KD;
-
-    g_param.set_speed = 0;
-
-    g_param.i_max = 8000;
-    g_param.i_min = -8000;
-    g_param.out_max = 8000;
-    g_param.out_min = -8000;
-  	g_param.flag = PARAM_FLAG_DEFAULT;
-}
-
-
-//¸üĞÂµ±Ç°ÏµÍ³Ê¹ÓÃ²ÎÊı
-void Param_To_System(param_t *p)
-{
-    if (!p) return;
-
-    g_speed_pid.Proportion = p->kp;
-    g_speed_pid.Integral   = p->ki;
-    g_speed_pid.Derivative = p->kd;
-
-    g_speed_pid.SetPoint = p->set_speed;
-
-    g_speed_pid.IngMax = p->i_max;
-    g_speed_pid.IngMin = p->i_min;
-    g_speed_pid.OutMax = p->out_max;
-    g_speed_pid.OutMin = p->out_min;
-}
-
-
-
-
-//²ÎÊı´æ´¢
-uint8_t Param_SaveToFlash(param_t *p)
-{
-    uint32_t crc;
-
-//    crc = CRC32((uint8_t*)p, sizeof(param_t));
-
-//    flash_erase(PARAM_ADDR);
-//    flash_write(PARAM_ADDR, (uint8_t*)p, sizeof(param_t));
-//    flash_write(PARAM_ADDR + sizeof(param_t), (uint8_t*)&crc, 4);
-
-    return 0;
-}
-//²ÎÊı¶ÁÈ¡
-uint8_t Param_LoadFromFlash(param_t *p)
-{
-    uint32_t crc_flash, crc_calc;
-
-//    flash_read(PARAM_ADDR, (uint8_t*)p, sizeof(param_t));
-//    flash_read(PARAM_ADDR + sizeof(param_t), (uint8_t*)&crc_flash, 4);
-
-//    crc_calc = CRC32((uint8_t*)p, sizeof(param_t));
-
-//    if (crc_calc != crc_flash)
-//        return -1;
-
-    return 0;
-}
-
-void Param_FromModbus(uint16_t *reg)
-{
-    int i;
-
-    for(i = 0; i < MAP_SIZE; i++)
-    {
-        switch(g_map[i].type)//Êı¾İÀàĞÍÓ³Éä
+        if (field == NULL)
         {
-            case PARAM_FLOAT:
-            {
-                float *p = (float*)g_map[i].addr;
-
-                *p =
-                    (float)reg[g_map[i].reg]
-                    / g_map[i].scale;
-            }
-            break;
-
-            case PARAM_S16:
-            {
-                float *p = (float*)g_map[i].addr;
-
-                *p =
-                    (float)((int16_t)
-                    reg[g_map[i].reg]);
-            }
-            break;
-
-            case PARAM_U16:
-            {
-                float *p = (float*)g_map[i].addr;
-
-                *p =
-                    (float)reg[g_map[i].reg];
-            }
-            break;
+            return 0u;
         }
-    }
-}
 
-void Param_ToModbus(uint16_t *reg)
-{
-    int i;
-
-    for(i = 0; i < MAP_SIZE; i++)
-    {
-        switch(g_map[i].type)//Êı¾İÀàĞÍÓ³Éä
+        if (desc->type == PARAM_TYPE_FLOAT)
         {
-            case PARAM_FLOAT:
-            {
-                float *p = (float*)g_map[i].addr;
-
-                reg[g_map[i].reg] =
-                    (uint16_t)
-                    (*p * g_map[i].scale);
-            }
-            break;
-
-            case PARAM_S16:
-            {
-                float *p = (float*)g_map[i].addr;
-
-                reg[g_map[i].reg] =
-                    (uint16_t)
-                    ((int16_t)(*p));
-            }
-            break;
-
-            case PARAM_U16:
-            {
-                float *p = (float*)g_map[i].addr;
-
-                reg[g_map[i].reg] =
-                    (uint16_t)(*p);
-            }
-            break;
+            float typed_value;
+            memcpy(&typed_value, field, sizeof(typed_value));
+            value = (double)typed_value;
         }
-    }
-}
-
-//¸üĞÂmodbusÊı¾İµ½²ÎÊıÔ´ÖĞ
-uint8_t Param_UpdateFromModbus(uint16_t *HoldingReg)
-{
-    if (!HoldingReg)
-        return 0;
-
-    Param_FromModbus(HoldingReg);
-
-    if(Param_Sanitize(&g_param))
-    {
-        Param_Publish(HoldingReg);
-    }
-
-    return 1;
-}
-//¸üĞÂ²ÎÊıÔ´ÖĞÊı¾İµ½modbusÊı¾İ
-void Param_Publish(uint16_t *HoldingReg)
-{
-    Param_ToModbus(HoldingReg);
-}
-
-uint8_t Param_Init_(void)//ÉÏµç²ÎÊı³õÊ¼»¯º¯Êı
-{
-    uint8_t ret = 0;
-
-    if(Param_LoadFromFlash(&g_param) != 0)
-    {//Èç¹û²ÎÊı¶ÁÈ¡Ê§°Ü
-        Param_InitDefault();
-        ret = 1;
-    }
-    else
-    {//Èç¹û²ÎÊı¶ÁÈ¡³É¹¦
-        if(g_param.flag != PARAM_FLAG_DEFAULT)
-        {//±êÖ¾Î»¼ì²é´íÎó
-            Param_InitDefault();
-            ret = 1;
+        else if (desc->type == PARAM_TYPE_INT32)
+        {
+            int32_t typed_value;
+            memcpy(&typed_value, field, sizeof(typed_value));
+            value = (double)typed_value;
+        }
+        else if (desc->type == PARAM_TYPE_UINT32)
+        {
+            uint32_t typed_value;
+            memcpy(&typed_value, field, sizeof(typed_value));
+            value = (double)typed_value;
         }
         else
-        {//½øĞĞºÏÀí»¯ÅĞ¶Ï
-            ret = Param_Sanitize(&g_param);
+        {
+            return 0u;
+        }
+
+        /* ç”± registry æ ¡éªŒæƒé™ã€ç±»å‹å’ŒèŒƒå›´ï¼Œå¹¶æ›´æ–°å…¶å½“å‰å€¼ã€‚ */
+        if (!ParamRegistry_SetCurrentValue(desc->id, value))
+        {
+            return 0u;
         }
     }
-
-    Param_To_System(&g_param);//½«g_param²ÎÊı¸üĞÂµ½ÏµÍ³
-
-    Param_Publish(HoldingReg);//²ÎÊı·¢²¼
-
-    return ret;
+    return 1u;
 }
 
-void Param_Apply(void)//Êı¾İÍ¬²½
+/* ä» registry å½“å‰å€¼ç”Ÿæˆè¿è¡ŒçŠ¶æ€ç»“æ„ä½“ï¼Œæœªé…ç½®å­—æ®µä¿æŒä¸ºé›¶ã€‚ */
+static uint8_t Param_RegistryRead(param_t *state)
 {
-		Param_UpdateFromModbus(HoldingReg);
+    uint16_t i;
+    uint8_t record[8];
+    uint16_t written;
 
-		Param_To_System(&g_param);
+    if (state == NULL || ParamRegistry_Init() != 0)
+    {
+        return 0u;
+    }
+    memset(state, 0, sizeof(*state));
+    for (i = 0u; i < ParamRegistry_Count(); ++i)
+    {
+        const param_desc_t *desc = ParamRegistry_GetAt(i);
+        uint8_t *field = Param_StateField(state, desc);
+        uint32_t bits;
 
-		Param_Publish(HoldingReg);
+        if (field == NULL ||
+            ParamValue_BuildRecord(desc->id, record, sizeof(record), &written) != 0 ||
+            written != sizeof(record))
+        {
+            return 0u;
+        }
+        bits = (uint32_t)record[4] | ((uint32_t)record[5] << 8) |
+               ((uint32_t)record[6] << 16) | ((uint32_t)record[7] << 24);
+        memcpy(field, &bits, sizeof(bits));
+    }
+    return 1u;
+}
 
-		//Param_SaveToFlash(&g_param);
+/* æ£€æŸ¥å‚æ•°çŠ¶æ€æŒ‡é’ˆå’Œç»Ÿä¸€å®šä¹‰è¡¨åˆå§‹åŒ–çŠ¶æ€ã€‚ */
+uint8_t Param_Sanitize(param_t *state)
+{
+    if (state == NULL || ParamRegistry_Init() != 0)
+    {
+        return 1u;
+    }
+    return 0u;
+}
+//ä»registryä¸­è·å–æŒ‡å®šçš„IDæ•°æ®åˆ°Param
+uint8_t Param_GetValue(const param_t *state, uint16_t id, double *value)
+{
+    return ParamRegistry_GetStateValue(state, id, value);
+}
+//ä»ä¸­Paramå†™æŒ‡å®šçš„IDæ•°æ®åˆ°registry
+uint8_t Param_SetValue(param_t *state, uint16_t id, double value)
+{
+    return ParamRegistry_SetStateValue(state, id, value);
+}
 
+/* å…ˆæ ¡éªŒå¹¶æ›´æ–° registryï¼Œå†æŒä¹…åŒ–ï¼›æˆåŠŸåæ‰å‘å¸ƒè¿è¡ŒçŠ¶æ€å’Œ PIDã€‚ */
+uint8_t Param_Commit(param_t *candidate)
+{
+    param_t accepted;
+    param_t previous;
+
+    if (candidate == NULL)
+    {
+        return 0u;
+    }
+    accepted = *candidate;
+    previous = g_param;
+    /* è‹¥å‚æ•°è¶Šç•Œæˆ–ä¸Šä¸‹é™å…³ç³»éæ³•ï¼Œæ‹’ç»æœ¬æ¬¡æäº¤ï¼Œä¸é™é»˜æ”¹å†™åå†æŠ¥å‘ŠæˆåŠŸã€‚ */
+    if (Param_Sanitize(&accepted) != 0u)
+    {
+        return 0u;
+    }
+    if (!Param_RegistrySync(&accepted))
+    {
+        (void)Param_RegistrySync(&previous);
+        return 0u;
+    }
+    if (!Param_SaveToFlash())
+    {
+        (void)Param_RegistrySync(&previous);
+        return 0u;
+    }
+    g_param = accepted;
+    *candidate = accepted;
+    Param_To_System(&g_param);
+    return 1u;
+}
+
+/* ç”¨ç»Ÿä¸€å®šä¹‰è¡¨ä¸­çš„é»˜è®¤å€¼åˆå§‹åŒ–é…ç½®å­—æ®µã€‚ */
+void Param_InitDefault(void)
+{
+    uint16_t i;
+    memset(&g_param, 0, sizeof(g_param));
+    for (i = 0u; i < ParamRegistry_Count(); ++i)
+    {
+        const param_desc_t *desc = ParamRegistry_GetAt(i);
+        if (desc != NULL)
+        {
+            (void)ParamRegistry_SetStateValue(&g_param, desc->id, desc->default_value);
+        }
+    }
+    g_param.flag = (float)PARAM_FLAG_DEFAULT;
+    (void)Param_RegistrySync(&g_param);
+}
+
+/* å¯åŠ¨æ—¶æ¢å¤ Flashï¼›æ²¡æœ‰æœ‰æ•ˆå¿«ç…§åˆ™å›åˆ°å®šä¹‰è¡¨é»˜è®¤å€¼ã€‚ */
+uint8_t Param_Init_(void)
+{
+    param_t loaded;
+    uint8_t status;
+
+    /* App å…¥å£æ˜¾å¼æ¸…ç† registry RAM ç¼“å­˜ï¼Œå…¼å®¹ bootloader ç›´æ¥è·³è½¬ã€‚ */
+    ParamRegistry_Reset();
+    if (ParamRegistry_Init() != 0)
+    {   //registryåˆå§‹åŒ–å¤±è´¥ï¼Œå°†ä½¿ç”¨å‚æ•°æè¿°è¡¨ä¸­çš„é»˜è®¤å‚æ•°
+        Param_InitDefault();//åˆå§‹åŒ–å…¨å±€å‚æ•°
+        Param_To_System(&g_param);//å‘å¸ƒå…¨å±€å‚æ•°
+        return 1u;
+    }
+    status = Param_LoadFromFlash(&loaded);//åŠ è½½flashæ•°æ®
+    if (status != 0u || Param_Sanitize(&loaded) != 0u)
+    {
+        Param_InitDefault();//flashåŠ è½½å¤±è´¥ï¼Œè¿˜æ˜¯ç”¨é»˜è®¤å‚æ•°
+        status = 1u;
+    }
+    else
+    {
+        g_param = loaded;//åŠ è½½æˆåŠŸï¼Œå°±èµ‹å€¼
+        (void)Param_RegistrySync(&g_param);//åŒæ—¶æ›´æ–°åˆ°Registryä¸­
+    }
+    Param_To_System(&g_param);//å‘å¸ƒå…¨å±€å‚æ•°
+    return status;
+}
+
+/* ä» Flash æ¢å¤ registryï¼Œå†ç”Ÿæˆä¾›æ§åˆ¶ä»£ç ä½¿ç”¨çš„çŠ¶æ€è§†å›¾ã€‚ */
+uint8_t Param_LoadFromFlash(param_t *state)
+{
+    if (ParamStorage_Load() != 0u || !Param_RegistryRead(state))
+    {
+        return 1u;
+    }
+    return 0u;
+}
+
+/* å°† registry å½“å‰å€¼ä¿å­˜ä¸ºä¸€ä»½å®Œæ•´ Flash å¿«ç…§ã€‚ */
+uint8_t Param_SaveToFlash(void)
+{
+    return ParamStorage_Save();
+}
+
+/* æŠŠå‚æ•°è¿è¡Œè§†å›¾ä¸€æ¬¡æ€§å‘å¸ƒã€‚ */
+void Param_To_System(param_t *state)
+{
+    if (state == NULL)
+    {
+        return;
+    }
+    g_speed_pid.Proportion = state->kp;
+    g_speed_pid.Integral = state->ki;
+    g_speed_pid.Derivative = state->kd;
+}
+
+/* è®¾ç½®ä¸è½ç›˜çš„ç›®æ ‡è½¬é€Ÿå‘½ä»¤ï¼Œè¿è¡ŒèŒƒå›´ä¸åŸåè®®å®šä¹‰ä¿æŒä¸€è‡´ã€‚ */
+uint8_t Param_SetSpeedCommand(int32_t speed)
+{
+    if (speed < -6000 || speed > 6000)
+    {
+        return 0u;
+    }
+    g_speed_pid.SetPoint = (float)speed;
+    return 1u;
+}
+
+/* è¯»å–å½“å‰ PID ç›®æ ‡å€¼ï¼Œä¾› Modbus Holding Register é•œåƒä½¿ç”¨ã€‚ */
+int32_t Param_GetSpeedCommand(void)
+{
+    float speed = g_speed_pid.SetPoint;
+    if (!isfinite((double)speed))
+    {
+        return 0;
+    }
+    if (speed < -6000.0f) speed = -6000.0f;
+    if (speed > 6000.0f) speed = 6000.0f;
+    return (int32_t)(speed + ((speed >= 0.0f) ? 0.5f : -0.5f));
 }
