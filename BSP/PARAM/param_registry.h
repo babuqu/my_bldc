@@ -2,6 +2,7 @@
 #define PARAM_REGISTRY_H
 
 #include "param.h"
+#include "param_list.h"
 #include <stdint.h>
 
 /* 参数值编码类型；当前每种类型均使用 4 字节。 */
@@ -18,13 +19,12 @@
 #define PARAM_NO_STATE_OFFSET  0xFFFFu
 
 /* 参数 ID 固定不变，不随描述表顺序调整。 */
+#define PARAM_DECLARE_ID(name_, id_, type_, access_, min_, max_, def_, ctype_, field_, publish_) name_ = (id_),
 enum
 {
-    Target_SPEED = 0x0101u,
-    PARAM_ID_KP_SPEED = 0x0102u,
-    PARAM_ID_KI_SPEED = 0x0103u,
-    PARAM_ID_KD_SPEED = 0x0104u,
+    PARAM_LIST(PARAM_DECLARE_ID)
 };
+#undef PARAM_DECLARE_ID
 
 /* 每项定义同时描述参数属性和 param_t 中对应字段的位置。 */
 typedef struct

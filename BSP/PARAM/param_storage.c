@@ -14,6 +14,8 @@
 #define PARAM_STORAGE_MAGIC          0x4D524150u
 #define PARAM_STORAGE_VERSION        3u
 #define PARAM_STORAGE_HEADER_SIZE    16u
+#define PARAM_STORAGE_VERSION_SCHEMA 4u
+#define PARAM_STORAGE_SCHEMA_HEADER_SIZE 20u
 #define PARAM_STORAGE_RECORD_SIZE    10u
 #define PARAM_STORAGE_CRC_SIZE       4u
 #define PARAM_STORAGE_SLOTS_PER_SECTOR \
@@ -143,31 +145,44 @@ static uint8_t ParamStorage_IsErased(const uint8_t *slot)
 
 static uint8_t ParamStorage_ValidateSlot(const uint8_t *slot, uint32_t *sequence)
 {
+    uint16_t version;
     uint16_t count;
-    uint16_t expected_count;
     uint32_t payload_length;
     uint32_t crc_offset;
     uint32_t record_offset;
+    uint32_t header_size;
     uint16_t i;
 
     /* 检查标识、版本、记录数量、整包 CRC 和每条记录。 */
     if (slot == NULL || sequence == NULL ||
-        ParamStorage_ReadU32(slot) != PARAM_STORAGE_MAGIC ||
-        ParamStorage_ReadU16(&slot[4]) != PARAM_STORAGE_VERSION)
+        ParamStorage_ReadU32(slot) != PARAM_STORAGE_MAGIC)
+    {
+        return 0u;
+    }
+
+    version = ParamStorage_ReadU16(&slot[4]);
+    if (version == PARAM_STORAGE_VERSION)
+    {
+        header_size = PARAM_STORAGE_HEADER_SIZE;
+    }
+    else if (version == PARAM_STORAGE_VERSION_SCHEMA)
+    {
+        header_size = PARAM_STORAGE_SCHEMA_HEADER_SIZE;
+    }
+    else
     {
         return 0u;
     }
 
     count = ParamStorage_ReadU16(&slot[6]);
-    expected_count = ParamStorage_PersistentCount();
     payload_length = ParamStorage_ReadU32(&slot[12]);
-    if (count != expected_count ||
-        payload_length != ((uint32_t)count * PARAM_STORAGE_RECORD_SIZE))
+    if (payload_length != ((uint32_t)count * PARAM_STORAGE_RECORD_SIZE) ||
+        header_size + payload_length + PARAM_STORAGE_CRC_SIZE > PARAM_STORAGE_SLOT_SIZE)
     {
         return 0u;
     }
 
-    crc_offset = PARAM_STORAGE_HEADER_SIZE + payload_length;
+    crc_offset = header_size + payload_length;
     if ((crc_offset + PARAM_STORAGE_CRC_SIZE) > PARAM_STORAGE_SLOT_SIZE ||
         ParamStorage_ReadU32(&slot[crc_offset]) !=
             ParamStorage_Crc32(slot, (uint16_t)crc_offset))
@@ -175,15 +190,11 @@ static uint8_t ParamStorage_ValidateSlot(const uint8_t *slot, uint32_t *sequence
         return 0u;
     }
 
-    record_offset = PARAM_STORAGE_HEADER_SIZE;
+    record_offset = header_size;
     for (i = 0u; i < count; ++i)
     {
-        uint16_t id = ParamStorage_ReadU16(&slot[record_offset]);
-        const param_desc_t *desc = ParamRegistry_Find(id);
         uint16_t record_crc = ParamStorage_ReadU16(&slot[record_offset + 8u]);
-        if (desc == NULL || (desc->access & PARAM_ACCESS_PERSIST) == 0u ||
-            record_crc != ParamStorage_Crc16(&slot[record_offset], 8u) ||
-            ParamValue_ValidateRecord(&slot[record_offset], 8u) != 0)
+        if (record_crc != ParamStorage_Crc16(&slot[record_offset], 8u))
         {
             return 0u;
         }
@@ -230,16 +241,23 @@ static param_storage_latest_t ParamStorage_FindLatest(uint8_t *snapshot)
 }
 static uint8_t ParamStorage_ApplySnapshot(const uint8_t *snapshot)
 {
+    uint16_t version = ParamStorage_ReadU16(&snapshot[4]);
     uint16_t count = ParamStorage_ReadU16(&snapshot[6]);
     uint16_t i;
-    uint32_t offset = PARAM_STORAGE_HEADER_SIZE;
+    uint32_t offset = (version == PARAM_STORAGE_VERSION_SCHEMA)
+                    ? PARAM_STORAGE_SCHEMA_HEADER_SIZE
+                    : PARAM_STORAGE_HEADER_SIZE;
 
     /* 快照整体校验通过后，再逐条更新 registry 当前值。 */
     for (i = 0u; i < count; ++i)
     {
-        if (ParamValue_ParseRecord(&snapshot[offset], 8u) != 0)
+        uint16_t id = ParamStorage_ReadU16(&snapshot[offset]);
+        const param_desc_t *desc = ParamRegistry_Find(id);
+
+        if (desc != NULL && (desc->access & PARAM_ACCESS_PERSIST) != 0u)
         {
-            return 0u;
+            /* A bad or incompatible record leaves only this parameter at default. */
+            (void)ParamValue_ParseRecord(&snapshot[offset], 8u);
         }
         offset += PARAM_STORAGE_RECORD_SIZE;
     }
@@ -285,7 +303,7 @@ static uint8_t ParamStorage_BuildSnapshot(uint8_t *snapshot, uint32_t sequence,
     uint32_t crc_offset;
     uint8_t record[8];
 
-    /* 快照头包含标识、版本、记录数量、序列号和负载长度。 */
+    /* Header binds the snapshot to the persistent parameter definitions. */
     memset(snapshot, 0xFF, PARAM_STORAGE_SLOT_SIZE);
     ParamStorage_WriteU32(snapshot, PARAM_STORAGE_MAGIC);
     ParamStorage_WriteU16(&snapshot[4], PARAM_STORAGE_VERSION);

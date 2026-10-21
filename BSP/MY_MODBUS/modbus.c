@@ -11,6 +11,15 @@
 
 static UART_Frame_t ModbusTx; // 静态发送帧缓存，包含待发送数据 buf 和数据长度 len。
 
+/* 发送状态为 BUSY 时不启动新的 DMA 发送；调用入口也会避免改写在用缓冲区。 */
+static void Modbus_StartTransmit(void)
+{
+    if (huart1.gState == HAL_UART_STATE_READY)
+    {
+        (void)HAL_UART_Transmit_DMA(&huart1, ModbusTx.buf, ModbusTx.len);
+    }
+}
+
 /* 参数提交或持久化失败时，按 Modbus 异常帧格式回复主站。 */
 static void Modbus_SendException(uint8_t slave, uint8_t function, uint8_t exception) // 组帧并发送异常响应。
 {
@@ -23,7 +32,7 @@ static void Modbus_SendException(uint8_t slave, uint8_t function, uint8_t except
     ModbusTx.buf[3] = (uint8_t)crc; // 按 RTU 顺序先写 CRC 低字节。
     ModbusTx.buf[4] = (uint8_t)(crc >> 8); // 再写 CRC 高字节。
     ModbusTx.len = 5u; // 异常响应由 3 字节数据和 2 字节 CRC 组成。
-    HAL_UART_Transmit_DMA(&huart1, ModbusTx.buf, ModbusTx.len); // 通过 USART1 DMA 发送异常响应。
+    Modbus_StartTransmit(); // 通过 USART1 DMA 发送异常响应。
 }
 
 // 保持寄存器映射；寄存器下标对应 Modbus 请求中的零基地址偏移。
@@ -68,7 +77,7 @@ void Modbus_Parse(uint8_t *buf, uint16_t len) // buf 指向接收帧，len 为�
     uint16_t crc_calc; // 保存本地计算得到的 CRC。
     uint16_t crc_recv; // 保存请求帧中携带的 CRC。
 
-    if(len < 8) // 过滤短于最小请求长度的帧。
+    if (buf == NULL || len < 4u || len > sizeof(((UART_Frame_t *)0)->buf)) // 至少包含地址、功能码和 CRC，且不得超过接收缓冲区。
     {
         return; // 长度不足时直接丢弃。
     }
@@ -89,21 +98,52 @@ void Modbus_Parse(uint8_t *buf, uint16_t len) // buf 指向接收帧，len 为�
         return; // 地址不匹配时忽略该请求。
     }
 
+    /* DMA 尚未发送完时不处理新请求，避免覆盖 DMA 正在读取的响应缓冲区。 */
+    if (huart1.gState != HAL_UART_STATE_READY)
+    {
+        return;
+    }
+
     switch(buf[1]) // 根据功能码选择请求处理函数。
     {
         case 0x03: // 功能码 0x03：读保持寄存器。
+            if (len != 8u)
+            {
+                Modbus_SendException(buf[0], buf[1], 0x03u); // 固定请求长度错误：非法数据值。
+                break;
+            }
             Modbus_Func03(buf); // 将整帧交给 0x03 处理函数。
             break; // 结束本分支，避免继续执行其他 case。
         case 0x06: // 功能码 0x06：写单个保持寄存器。
+            if (len != 8u)
+            {
+                Modbus_SendException(buf[0], buf[1], 0x03u);
+                break;
+            }
             Modbus_Func06(buf); // 将整帧交给 0x06 处理函数。
             break; // 结束本分支。
         case 0x10: // 功能码 0x10：写多个保持寄存器。
+            if (len < 9u)
+            {
+                break; // 字节计数字段不完整，无法安全构造异常响应。
+            }
+            if (len != (uint16_t)(9u + buf[6]))
+            {
+                Modbus_SendException(buf[0], buf[1], 0x03u); // 实际帧长与字节计数字段不一致。
+                break;
+            }
             Modbus_Func10(buf); // 将整帧交给 0x10 处理函数。
             break; // 结束本分支。
         case 0x04: // 功能码 0x04：读输入寄存器。
+            if (len != 8u)
+            {
+                Modbus_SendException(buf[0], buf[1], 0x03u);
+                break;
+            }
             Modbus_Func04(buf); // 将整帧交给 0x04 处理函数。
             break; // 结束本分支。
         default: // 其他功能码当前没有处理逻辑。
+            Modbus_SendException(buf[0], buf[1], 0x01u); // 返回非法功能码异常。
             break; // 忽略不支持的功能码。
     }
 }
@@ -126,9 +166,15 @@ void Modbus_Func03(uint8_t *rx) // rx 指向已经通过 Modbus_Parse 校验的�
         |
         rx[5]; // 数量低字节位于 rx[5]。
 
-    if((addr + num) > HOLDING_REG_NUM) // 检查所请求的地址区间是否超过数组末尾。
+    if (num == 0u)
     {
-        return; // 越界时不读取数组，也不发送响应。
+        Modbus_SendException(MODBUS_SLAVE_ADDR, 0x03u, 0x03u); // 读取数量不能为零。
+        return;
+    }
+    if (((uint32_t)addr + num) > HOLDING_REG_NUM) // 检查所请求的地址区间是否超过数组末尾。
+    {
+        Modbus_SendException(MODBUS_SLAVE_ADDR, 0x03u, 0x02u); // 请求地址超出保持寄存器范围。
+        return;
     }
 
     ModbusTx.buf[0] = MODBUS_SLAVE_ADDR; // 响应第 1 字节：本机从站地址。
@@ -156,10 +202,7 @@ void Modbus_Func03(uint8_t *rx) // rx 指向已经通过 Modbus_Parse 校验的�
 
     ModbusTx.len = index; // 记录完整响应帧长度。
 
-    HAL_UART_Transmit_DMA( // 启动 UART DMA 发送响应帧。
-        &huart1, // 使用 USART1。
-        ModbusTx.buf, // 发送数据所在缓冲区。
-        ModbusTx.len); // 发送的总字节数。
+    Modbus_StartTransmit(); // 启动 UART DMA 发送响应帧。
 }
 
 // 功能码 0x06：写入一个保持寄存器，成功时回显请求内容。
@@ -168,6 +211,7 @@ void Modbus_Func06(uint8_t *rx) // rx 指向功能码 0x06 请求帧。
     uint16_t addr; // 请求写入的寄存器偏移。
     uint16_t value; // 请求写入的 16 位寄存器值。
     uint16_t crc; // 回显响应帧 CRC。
+    uint8_t exception_code;
 
     addr = // 从请求帧解析寄存器地址。
         (rx[2] << 8) // 地址高字节。
@@ -179,14 +223,15 @@ void Modbus_Func06(uint8_t *rx) // rx 指向功能码 0x06 请求帧。
 
     if(addr >= HOLDING_REG_NUM) // 检查目标地址是否在保持寄存器数组范围内。
     {
-        return; // 地址越界时丢弃请求。
+        Modbus_SendException(rx[0], rx[1], 0x02u); // 返回非法数据地址。
+        return;
     }
 
     HoldingReg[addr] = value; // 先把收到的值写入保持寄存器镜像。
 
-    if (!Param_Apply(addr, 1u)) // 将本次写入的一个寄存器交给参数服务校验并应用。
+    if (!Param_ApplyEx(addr, 1u, &exception_code)) // 将本次写入的一个寄存器交给参数服务校验并应用。
     {
-        Modbus_SendException(rx[0], rx[1], 0x04u); // 应用失败时发送设备故障异常响应。
+        Modbus_SendException(rx[0], rx[1], exception_code); // 按参数服务给出的原因返回异常。
         return; // 已发送异常响应，不再发送正常回显。
     }
 
@@ -199,10 +244,7 @@ void Modbus_Func06(uint8_t *rx) // rx 指向功能码 0x06 请求帧。
 
     ModbusTx.len = 8; // 功能码 0x06 的正常响应固定为 8 字节。
 
-    HAL_UART_Transmit_DMA( // 启动 UART DMA 发送正常响应。
-        &huart1, // 使用 USART1。
-        ModbusTx.buf, // 发送数据所在缓冲区。
-        ModbusTx.len); // 发送的总字节数。
+    Modbus_StartTransmit(); // 启动 UART DMA 发送正常响应。
 }
 
 // 功能码 0x10：解析并写入一段连续保持寄存器。
@@ -214,6 +256,7 @@ void Modbus_Func10(uint8_t *rx) // rx 指向功能码 0x10 请求帧。
 
 		uint16_t value; // 暂存当前解析出来的寄存器值。
 		uint16_t crc; // 正常响应帧 CRC。
+		uint8_t exception_code;
 
 		uint16_t i; // 遍历寄存器数据的循环变量。
 
@@ -227,14 +270,22 @@ void Modbus_Func10(uint8_t *rx) // rx 指向功能码 0x10 请求帧。
 
 		byte_cnt = rx[6]; // 读取请求帧中的数据字节数声明。
 
-		if(byte_cnt != num * 2) // 每个寄存器为 16 位，因此数据字节数应等于数量乘 2。
+		if (num == 0u)
 		{
-				return; // 声明长度不匹配时丢弃请求。
+				Modbus_SendException(rx[0], rx[1], 0x03u); // 写入数量不能为零。
+				return;
 		}
 
-		if((addr + num) > HOLDING_REG_NUM) // 检查本次连续写入的地址范围是否越界。
+		if(byte_cnt != num * 2) // 每个寄存器为 16 位，因此数据字节数应等于数量乘 2。
 		{
-				return; // 越界时不写寄存器。
+				Modbus_SendException(rx[0], rx[1], 0x03u); // 返回非法数据值。
+				return;
+		}
+
+		if (((uint32_t)addr + num) > HOLDING_REG_NUM) // 检查本次连续写入的地址范围是否越界。
+		{
+				Modbus_SendException(rx[0], rx[1], 0x02u); // 返回非法数据地址。
+				return;
 		}
 
 		for(i = 0; i < num; i++) // 逐个解析并保存请求中的寄存器值。
@@ -246,9 +297,9 @@ void Modbus_Func10(uint8_t *rx) // rx 指向功能码 0x10 请求帧。
 				HoldingReg[addr + i] = value; // 写入对应下标的保持寄存器镜像。
 		}
 
-    if (!Param_Apply(addr, num)) // 将本次写入范围交给参数服务统一校验和应用。
+    if (!Param_ApplyEx(addr, num, &exception_code)) // 将本次写入范围交给参数服务统一校验和应用。
     {
-        Modbus_SendException(rx[0], rx[1], 0x04u); // 应用失败时发送设备故障异常响应。
+        Modbus_SendException(rx[0], rx[1], exception_code); // 按参数服务给出的原因返回异常。
         return; // 已发送异常响应，不再构造正常响应。
     }
 
@@ -268,10 +319,7 @@ void Modbus_Func10(uint8_t *rx) // rx 指向功能码 0x10 请求帧。
 
 		ModbusTx.len = 8; // 功能码 0x10 的正常响应固定为 8 字节。
 
-		HAL_UART_Transmit_DMA( // 启动 UART DMA 发送写入确认响应。
-				&huart1, // 使用 USART1。
-				ModbusTx.buf, // 发送数据所在缓冲区。
-				ModbusTx.len); // 发送的总字节数。
+		Modbus_StartTransmit(); // 启动 UART DMA 发送写入确认响应。
 
 }
 
@@ -293,9 +341,15 @@ void Modbus_Func04(uint8_t *rx) // rx 指向功能码 0x04 请求帧。
         ((uint16_t)rx[4] << 8) // 数量高字节。
         | rx[5]; // 数量低字节。
 
-    if((addr + num) > INPUT_REG_NUM) // 检查读取区间是否超过输入寄存器数组边界。
+    if (num == 0u)
     {
-        return; // 越界时不生成响应。
+        Modbus_SendException(MODBUS_SLAVE_ADDR, 0x04u, 0x03u); // 读取数量不能为零。
+        return;
+    }
+    if (((uint32_t)addr + num) > INPUT_REG_NUM) // 检查读取区间是否超过输入寄存器数组边界。
+    {
+        Modbus_SendException(MODBUS_SLAVE_ADDR, 0x04u, 0x02u); // 请求地址超出输入寄存器范围。
+        return;
     }
 
     ModbusTx.buf[0] = MODBUS_SLAVE_ADDR; // 响应第 1 字节：本机从站地址。
@@ -320,10 +374,7 @@ void Modbus_Func04(uint8_t *rx) // rx 指向功能码 0x04 请求帧。
 
     ModbusTx.len = index; // 保存响应帧总长度。
 
-    HAL_UART_Transmit_DMA( // 启动 UART DMA 发送输入寄存器响应。
-        &huart1, // 使用 USART1。
-        ModbusTx.buf, // 发送数据所在缓冲区。
-        ModbusTx.len); // 发送的总字节数。
+    Modbus_StartTransmit(); // 启动 UART DMA 发送输入寄存器响应。
 }
 
 // 计算 Modbus RTU 使用的 CRC-16，返回值发送时低字节在前、高字节在后。

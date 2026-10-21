@@ -4,6 +4,7 @@
  * 本文件不负责Modbus地址、PID同步或Flash擦写。
  */
 #include "param_registry.h"
+#include "param_list.h"
 #include "param.h"
 #include <math.h>
 #include <limits.h>
@@ -22,23 +23,13 @@
  * FLOAT的min/max/default例如直接写0.0、6.55、0.0，不写IEEE位模式。
  */
 /* 描述表保存ID、类型、范围和状态字段偏移；当前值按相同下标单独保存。 */
+#define PARAM_DESC_ENTRY(name_, id_, type_, access_, min_, max_, def_, ctype_, field_, publish_) \
+    PARAM_DESC_STATE(id_, type_, access_, min_, max_, def_, field_),
 static const param_desc_t g_param_desc[] =
 {
-    PARAM_DESC_STATE(PARAM_ID_KP_SPEED, PARAM_TYPE_FLOAT,
-                     PARAM_ACCESS_READ | PARAM_ACCESS_WRITE | PARAM_ACCESS_PERSIST,
-                     0.0, 6.55, 0.5000f, kp),
-    PARAM_DESC_STATE(PARAM_ID_KI_SPEED, PARAM_TYPE_FLOAT,
-                     PARAM_ACCESS_READ | PARAM_ACCESS_WRITE | PARAM_ACCESS_PERSIST,
-                     0.0, 6.55, 0.25f, ki),
-    PARAM_DESC_STATE(PARAM_ID_KD_SPEED, PARAM_TYPE_FLOAT,
-                     PARAM_ACCESS_READ | PARAM_ACCESS_WRITE | PARAM_ACCESS_PERSIST,
-                     0.0, 6.55, 0.150f, kd),
-    PARAM_DESC_STATE(Target_SPEED, PARAM_TYPE_INT32,
-                     PARAM_ACCESS_READ | PARAM_ACCESS_WRITE,
-                     -32760, 32760, 0, target_speed)
-    //在这里添加新的参数ID的描述···
+    PARAM_LIST(PARAM_DESC_ENTRY)
 };
-
+#undef PARAM_DESC_ENTRY
 #define PARAM_DESC_COUNT (sizeof(g_param_desc) / sizeof(g_param_desc[0])) /* 描述项数量。 */
 static param_value_t g_param_values[PARAM_DESC_COUNT]; /* 独立保存各参数当前值。 */
 static uint16_t g_param_desc_crc16[PARAM_DESC_COUNT]; /* 缓存描述CRC，不修改只读描述表。 */

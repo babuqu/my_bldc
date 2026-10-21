@@ -3,7 +3,8 @@
 #include <stddef.h>           // 提供 NULL 定义。
 #include <stdint.h>           // 提供 uint16_t、int32_t 等定宽整数类型。
 #include "modbus.h"          // 提供保持寄存器数组和寄存器数量定义。
-#include "param_registry.h"  // 提供 KP、KI、KD 对应的参数 ID。
+#include "param_registry.h"
+#include "param_modbus_list.h"  // 提供 KP、KI、KD 对应的参数 ID。
 
 /* KP、KI、KD 在 Modbus 寄存器中按 0.001 的分辨率传输。 */
 #define PARAM_GAIN_SCALE 10000.0 // 写入时除以该值还原参数，读取时乘以该值编码。
@@ -25,15 +26,12 @@ typedef struct
 } param_modbus_map_t;   // Modbus 参数映射项类型。
 
 /* 只把配置参数映射到 g_param。 */
-static const param_modbus_map_t g_modbus_map[] = // 定义寄存器偏移到参数 ID 的对应关系。
-{   
-    {0u, Target_SPEED, 1.0, PARAM_MODBUS_S16}, // 寄存器 0：目标转速，按 S16 传输，允许正负转速。
-    {1u, PARAM_ID_KP_SPEED, PARAM_GAIN_SCALE, PARAM_MODBUS_U16}, // 寄存器 1：速度环 KP，非负值乘 10000 后按 U16 传输。
-    {2u, PARAM_ID_KI_SPEED, PARAM_GAIN_SCALE, PARAM_MODBUS_U16}, // 寄存器 2：速度环 KI，非负值乘 10000 后按 U16 传输。
-    {3u, PARAM_ID_KD_SPEED, PARAM_GAIN_SCALE, PARAM_MODBUS_U16}, // 寄存器 3：速度环 KD，非负值乘 10000 后按 U16 传输。
-    
+#define PARAM_MODBUS_ENTRY(reg_, id_, scale_, type_) {(reg_), (id_), (scale_), (type_)},
+static const param_modbus_map_t g_modbus_map[] =
+{
+    PARAM_MODBUS_LIST(PARAM_MODBUS_ENTRY)
 };
-
+#undef PARAM_MODBUS_ENTRY
 #define PARAM_MODBUS_MAP_COUNT (sizeof(g_modbus_map) / sizeof(g_modbus_map[0])) // 映射表中的参数数量。
 
 /* 按映射项指定的 U16/S16 类型，把寄存器字解码为 int32_t。 */
@@ -90,17 +88,23 @@ static void ParamModbus_Encode(const param_t *state, uint16_t *registers) // sta
 }
 
 /* 将本次 Modbus 写入的映射寄存器转换为参数值，并提交到 g_param。 */
-uint8_t Param_UpdateFromModbus(uint16_t *registers, // Modbus 保持寄存器数据数组。
-                               uint16_t start_reg, // 本次写入的起始寄存器偏移。
-                               uint16_t reg_count) // 本次写入覆盖的寄存器数量。
+uint8_t Param_UpdateFromModbusEx(uint16_t *registers, // Modbus 保持寄存器数据数组。
+                                 uint16_t start_reg, // 本次写入的起始寄存器偏移。
+                                 uint16_t reg_count, // 本次写入覆盖的寄存器数量。
+                                 uint8_t *exception_code) // 可选的 Modbus 异常码输出。
 {
     param_t candidate; // 暂存待校验、待提交的参数副本。
     uint32_t request_end; // 请求范围末端地址，采用 32 位避免加法溢出。
     uint8_t config_changed = 0u; // 标记本次请求是否包含已映射的参数。
     uint16_t i; // 映射表遍历索引。
 
+    if (exception_code != NULL)
+    {
+        *exception_code = 0x04u; // 默认按设备内部故障处理，例如提交或 Flash 保存失败。
+    }
     if (registers == NULL || reg_count == 0u) // 检查输入数组和写入数量。
     {
+        if (exception_code != NULL) *exception_code = 0x03u;
         return 0u; // 输入无效，返回失败。
     }
 
@@ -108,6 +112,7 @@ uint8_t Param_UpdateFromModbus(uint16_t *registers, // Modbus 保持寄存器数
     if (request_end > HOLDING_REG_NUM) // 确认请求区间没有超过保持寄存器数组。
     {
         ParamModbus_Encode(&g_param, registers); // 越界时用当前有效参数刷新已映射寄存器。
+        if (exception_code != NULL) *exception_code = 0x02u;
         return 0u; // 拒绝越界请求。
     }
 
@@ -128,6 +133,7 @@ uint8_t Param_UpdateFromModbus(uint16_t *registers, // Modbus 保持寄存器数
         if (!Param_SetValue(&candidate, map->param_id, value)) // 写入候选参数并由参数注册表校验范围。
         {
             ParamModbus_Encode(&g_param, registers); // 任一参数无效时恢复当前有效值到寄存器镜像。
+            if (exception_code != NULL) *exception_code = 0x03u;
             return 0u; // 拒绝整次请求，不提交部分参数。
         }
 
@@ -141,7 +147,14 @@ uint8_t Param_UpdateFromModbus(uint16_t *registers, // Modbus 保持寄存器数
     }
 
     ParamModbus_Encode(&g_param, registers); // 成功后用最新 g_param 刷新 KP、KI、KD 寄存器。
+    if (exception_code != NULL) *exception_code = 0u;
     return 1u; // 本次请求处理成功。
+}
+
+uint8_t Param_UpdateFromModbus(uint16_t *registers,
+                               uint16_t start_reg, uint16_t reg_count)
+{
+    return Param_UpdateFromModbusEx(registers, start_reg, reg_count, NULL);
 }
 
 /* 读取保持寄存器前，将 g_param 当前值发布到寄存器镜像。 */
@@ -154,4 +167,11 @@ void Param_Publish(uint16_t *registers) // registers 指向 Modbus 保持寄存�
 uint8_t Param_Apply(uint16_t start_reg, uint16_t reg_count) // start_reg 和 reg_count 描述本次写入范围。
 {
     return Param_UpdateFromModbus(HoldingReg, start_reg, reg_count); // 从全局保持寄存器读取数据并更新参数。
+}
+
+uint8_t Param_ApplyEx(uint16_t start_reg, uint16_t reg_count,
+                      uint8_t *exception_code)
+{
+    return Param_UpdateFromModbusEx(HoldingReg, start_reg, reg_count,
+                                    exception_code);
 }
