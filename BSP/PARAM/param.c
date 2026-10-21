@@ -1,6 +1,5 @@
 #include "param.h"
 #include "param_registry.h"
-#include <math.h>
 #include <stdint.h>
 #include <string.h>
 #include "pid.h"
@@ -132,6 +131,8 @@ uint8_t Param_Commit(param_t *candidate)
 {
     param_t accepted;
     param_t previous;
+    uint8_t persistent_changed = 0u;
+    uint16_t i;
 
     if (candidate == NULL)
     {
@@ -144,12 +145,42 @@ uint8_t Param_Commit(param_t *candidate)
     {
         return 0u;
     }
+    for (i = 0u; i < ParamRegistry_Count(); ++i)
+    {
+        const param_desc_t *desc = ParamRegistry_GetAt(i);
+        const uint8_t *new_field;
+        const uint8_t *old_field;
+
+        if (desc == NULL)
+        {
+            return 0u;
+        }
+        if ((desc->access & PARAM_ACCESS_PERSIST) == 0u)
+        {
+            continue;
+        }
+        new_field = Param_StateField(&accepted, desc);
+        old_field = Param_StateField(&previous, desc);
+        if (new_field == NULL || old_field == NULL)
+        {
+            return 0u;
+        }
+        if (memcmp(new_field, old_field, desc->length) != 0)
+        {
+            persistent_changed = 1u;
+            break;
+        }
+    }
+    if (persistent_changed && ParamStorage_Load() != 0u)
+    {
+        return 0u;
+    }
     if (!Param_RegistrySync(&accepted))
     {
         (void)Param_RegistrySync(&previous);
         return 0u;
     }
-    if (!Param_SaveToFlash())
+    if (persistent_changed && !Param_SaveToFlash())
     {
         (void)Param_RegistrySync(&previous);
         return 0u;
@@ -232,28 +263,4 @@ void Param_To_System(param_t *state)
     g_speed_pid.Proportion = state->kp;
     g_speed_pid.Integral = state->ki;
     g_speed_pid.Derivative = state->kd;
-}
-
-/* 设置不落盘的目标转速命令，运行范围与原协议定义保持一致。 */
-uint8_t Param_SetSpeedCommand(int32_t speed)
-{
-    if (speed < -6000 || speed > 6000)
-    {
-        return 0u;
-    }
-    g_speed_pid.SetPoint = (float)speed;
-    return 1u;
-}
-
-/* 读取当前 PID 目标值，供 Modbus Holding Register 镜像使用。 */
-int32_t Param_GetSpeedCommand(void)
-{
-    float speed = g_speed_pid.SetPoint;
-    if (!isfinite((double)speed))
-    {
-        return 0;
-    }
-    if (speed < -6000.0f) speed = -6000.0f;
-    if (speed > 6000.0f) speed = 6000.0f;
-    return (int32_t)(speed + ((speed >= 0.0f) ? 0.5f : -0.5f));
 }

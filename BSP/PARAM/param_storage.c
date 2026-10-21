@@ -12,7 +12,7 @@
 #define PARAM_STORAGE_SECTOR_SIZE    0x00020000u
 #define PARAM_STORAGE_SLOT_SIZE      128u
 #define PARAM_STORAGE_MAGIC          0x4D524150u
-#define PARAM_STORAGE_VERSION        2u
+#define PARAM_STORAGE_VERSION        3u
 #define PARAM_STORAGE_HEADER_SIZE    16u
 #define PARAM_STORAGE_RECORD_SIZE    10u
 #define PARAM_STORAGE_CRC_SIZE       4u
@@ -46,6 +46,23 @@ static uint16_t g_next_slot;
 static uint32_t g_latest_sequence;
 
 static uint8_t ParamStorage_FindErasedSlot(uint8_t sector, uint16_t *slot_index);
+
+/* 统计需要保存到 Flash 的参数项数量。 */
+static uint16_t ParamStorage_PersistentCount(void)
+{
+    uint16_t i;
+    uint16_t count = 0u;
+
+    for (i = 0u; i < ParamRegistry_Count(); ++i)
+    {
+        const param_desc_t *desc = ParamRegistry_GetAt(i);
+        if (desc != NULL && (desc->access & PARAM_ACCESS_PERSIST) != 0u)
+        {
+            ++count;
+        }
+    }
+    return count;
+}
 
 /* 按小端序读写字节，避免依赖结构体对齐和填充。 */
 static uint16_t ParamStorage_ReadU16(const uint8_t *data)
@@ -142,7 +159,7 @@ static uint8_t ParamStorage_ValidateSlot(const uint8_t *slot, uint32_t *sequence
     }
 
     count = ParamStorage_ReadU16(&slot[6]);
-    expected_count = ParamRegistry_Count();
+    expected_count = ParamStorage_PersistentCount();
     payload_length = ParamStorage_ReadU32(&slot[12]);
     if (count != expected_count ||
         payload_length != ((uint32_t)count * PARAM_STORAGE_RECORD_SIZE))
@@ -161,8 +178,11 @@ static uint8_t ParamStorage_ValidateSlot(const uint8_t *slot, uint32_t *sequence
     record_offset = PARAM_STORAGE_HEADER_SIZE;
     for (i = 0u; i < count; ++i)
     {
+        uint16_t id = ParamStorage_ReadU16(&slot[record_offset]);
+        const param_desc_t *desc = ParamRegistry_Find(id);
         uint16_t record_crc = ParamStorage_ReadU16(&slot[record_offset + 8u]);
-        if (record_crc != ParamStorage_Crc16(&slot[record_offset], 8u) ||
+        if (desc == NULL || (desc->access & PARAM_ACCESS_PERSIST) == 0u ||
+            record_crc != ParamStorage_Crc16(&slot[record_offset], 8u) ||
             ParamValue_ValidateRecord(&slot[record_offset], 8u) != 0)
         {
             return 0u;
@@ -257,7 +277,8 @@ uint8_t ParamStorage_Load(void)
 static uint8_t ParamStorage_BuildSnapshot(uint8_t *snapshot, uint32_t sequence,
                                          uint16_t *program_length)
 {
-    uint16_t count = ParamRegistry_Count();
+    uint16_t count = ParamStorage_PersistentCount();
+    uint16_t registry_count = ParamRegistry_Count();
     uint16_t i;
     uint16_t written;
     uint32_t offset = PARAM_STORAGE_HEADER_SIZE;
@@ -273,11 +294,18 @@ static uint8_t ParamStorage_BuildSnapshot(uint8_t *snapshot, uint32_t sequence,
     ParamStorage_WriteU32(&snapshot[12], (uint32_t)count * PARAM_STORAGE_RECORD_SIZE);
 
     /* 每条参数记录包含 ID、类型、长度、数据和 CRC16。 */
-    for (i = 0u; i < count; ++i)
+    for (i = 0u; i < registry_count; ++i)
     {
         const param_desc_t *desc = ParamRegistry_GetAt(i);
-        if (desc == NULL ||
-            ParamValue_BuildRecord(desc->id, record, sizeof(record), &written) != 0 ||
+        if (desc == NULL)
+        {
+            return 0u;
+        }
+        if ((desc->access & PARAM_ACCESS_PERSIST) == 0u)
+        {
+            continue;
+        }
+        if (ParamValue_BuildRecord(desc->id, record, sizeof(record), &written) != 0 ||
             written != 8u)
         {
             return 0u;

@@ -2,7 +2,7 @@
 
 ## 参数定义与 `param_t` 的对应关系
 
-`param_registry.c` 中的 `g_param_desc` 是持久化配置参数的定义表。每项描述稳定 ID、数据类型、长度、读写权限、工程值范围、默认值，以及它在 `param_t` 中对应字段的偏移。
+`param_registry.c` 中的 `g_param_desc` 是参数定义表。每项描述稳定 ID、数据类型、长度、读写权限、是否持久化、工程值范围、默认值，以及它在 `param_t` 中对应字段的偏移。设置 `PARAM_ACCESS_PERSIST` 的参数会进入 Flash 快照；未设置的参数只保存在运行时状态和 registry 缓存中。
 
 表项通过 `PARAM_DESC_STATE` 宏创建。最后一个参数是 `param_t` 的字段名，宏用 `offsetof` 将字段名转换成 `state_offset`：
 

@@ -25,14 +25,17 @@
 static const param_desc_t g_param_desc[] =
 {
     PARAM_DESC_STATE(PARAM_ID_KP_SPEED, PARAM_TYPE_FLOAT,
-                     PARAM_ACCESS_READ | PARAM_ACCESS_WRITE,
-                     0.0, 6.55, 0.0, kp),
+                     PARAM_ACCESS_READ | PARAM_ACCESS_WRITE | PARAM_ACCESS_PERSIST,
+                     0.0, 6.55, 0.5000f, kp),
     PARAM_DESC_STATE(PARAM_ID_KI_SPEED, PARAM_TYPE_FLOAT,
-                     PARAM_ACCESS_READ | PARAM_ACCESS_WRITE,
-                     0.0, 6.55, 0.0, ki),
+                     PARAM_ACCESS_READ | PARAM_ACCESS_WRITE | PARAM_ACCESS_PERSIST,
+                     0.0, 6.55, 0.25f, ki),
     PARAM_DESC_STATE(PARAM_ID_KD_SPEED, PARAM_TYPE_FLOAT,
+                     PARAM_ACCESS_READ | PARAM_ACCESS_WRITE | PARAM_ACCESS_PERSIST,
+                     0.0, 6.55, 0.150f, kd),
+    PARAM_DESC_STATE(Target_SPEED, PARAM_TYPE_INT32,
                      PARAM_ACCESS_READ | PARAM_ACCESS_WRITE,
-                     0.0, 6.55, 0.0, kd)
+                     -32760, 32760, 0, target_speed)
     //在这里添加新的参数ID的描述···
 };
 
@@ -263,7 +266,8 @@ int ParamRegistry_Init(void)
         //对参数描述表第i个参数值进行合理性检查，如果检查失败，认为参数描述表异常
         if (current_def->length != 4u ||
             (current_def->access &
-             (uint8_t)~(PARAM_ACCESS_READ | PARAM_ACCESS_WRITE)) != 0u ||
+             (uint8_t)~(PARAM_ACCESS_READ | PARAM_ACCESS_WRITE |
+                        PARAM_ACCESS_PERSIST)) != 0u ||
             (current_def->access &
              (PARAM_ACCESS_READ | PARAM_ACCESS_WRITE)) == 0u ||
             !isfinite(current_def->min_value) || !isfinite(current_def->max_value) ||

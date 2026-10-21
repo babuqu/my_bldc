@@ -47,7 +47,8 @@ void pid_init(void)
     g_speed_pid.IngMax = 8000;
     g_speed_pid.IngMin = -8000;
     g_speed_pid.OutMax = 8000;      /* 输出限制 */
-    g_speed_pid.OutMin = -8000;    
+    g_speed_pid.OutMin = -8000;   
+    g_speed_pid.pid_gain = 10000; 	
 }
 float *user_setpoint = (float*)(&g_speed_pid.SetPoint);
 
@@ -60,10 +61,10 @@ float *user_setpoint = (float*)(&g_speed_pid.SetPoint);
 float increment_pid_ctrl(PID_TypeDef *PID,float Feedback_value)
 {
     PID->Error = (float)(PID->SetPoint - Feedback_value);   /* 偏差值 */
-    PID->Up = PID->Proportion * PID->Error;
-    PID->Ui += (PID->Error * PID->Integral);
+    PID->Up = PID->Proportion * PID->Error /PID->pid_gain;
+    PID->Ui += (PID->Error * PID->Integral/PID->pid_gain);
     LIMIT_OUT(PID->Ui,PID->IngMax,PID->IngMin);
-    PID->Ud = PID->Derivative * (PID->Error - PID->LastError);
+    PID->Ud = PID->Derivative /PID->pid_gain * (PID->Error - PID->LastError);
     PID->ActualValue = PID->Up + PID->Ui + PID->Ud;
     LIMIT_OUT(PID->ActualValue,PID->OutMax,PID->OutMin);
     PID->LastError = PID->Error;

@@ -9,9 +9,10 @@
 #define PARAM_TYPE_FLOAT   1u
 #define PARAM_TYPE_UINT32  2u
 
-/* 参数读写权限，可按位组合。 */
-#define PARAM_ACCESS_READ  0x01u
-#define PARAM_ACCESS_WRITE 0x02u
+/* 参数属性可按位组合：读、写权限与 Flash 持久化标记相互独立。 */
+#define PARAM_ACCESS_READ    0x01u
+#define PARAM_ACCESS_WRITE   0x02u
+#define PARAM_ACCESS_PERSIST 0x04u
 
 #define PARAM_VALUE_MAX_LENGTH 4u
 #define PARAM_NO_STATE_OFFSET  0xFFFFu
@@ -19,9 +20,10 @@
 /* 参数 ID 固定不变，不随描述表顺序调整。 */
 enum
 {
-    PARAM_ID_KP_SPEED = 0x0101u,
-    PARAM_ID_KI_SPEED = 0x0102u,
-    PARAM_ID_KD_SPEED = 0x0103u
+    Target_SPEED = 0x0101u,
+    PARAM_ID_KP_SPEED = 0x0102u,
+    PARAM_ID_KI_SPEED = 0x0103u,
+    PARAM_ID_KD_SPEED = 0x0104u,
 };
 
 /* 每项定义同时描述参数属性和 param_t 中对应字段的位置。 */

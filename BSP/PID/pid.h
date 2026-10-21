@@ -30,9 +30,14 @@
 /* PID相关参数 */
 
 /*定义PID参数相关宏*/
-#define  KP      0.00005000f           /* P参数*/
-#define  KI      0.000025f           /* I参数*/
-#define  KD      0.0000150f          /* D参数*/
+//#define  KP      0.00005000f           /* P参数*/
+//#define  KI      0.000025f           /* I参数*/
+//#define  KD      0.0000150f          /* D参数*/
+//#define SMAPLSE_PID_SPEED  40       /* 采样率 单位ms */
+
+#define  KP      0.5000f          /* P参数*/
+#define  KI      0.25f           /* I参数*/
+#define  KD      0.150f          /* D参数*/
 #define SMAPLSE_PID_SPEED  40       /* 采样率 单位ms */
 
 /*定义位置PID参数相关宏*/
@@ -55,6 +60,7 @@ typedef struct
     __IO float  IngMax;
     __IO float  OutMin;
     __IO float  OutMax;
+	  __IO float  pid_gain;            /* PID系数增益*/
 } PID_TypeDef;
 
 #define LIMIT_OUT(var,max,min) {(var)=(var)>(max)?(max):(var);(var)=(var)<(min)?(min):(var);}
